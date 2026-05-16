@@ -59,9 +59,6 @@ const emptyData = {
   recurringRules: [],
   transactions: [],
   categories: [
-    { id: 'famiglia', name: 'Famiglia', group: 'fixed' },
-    { id: 'consulenza', name: 'Consulenza', group: 'fixed' },
-    { id: 'telefono', name: 'Telefono', group: 'fixed' },
     { id: 'alimentari', name: 'Alimentari', group: 'variable' },
     { id: 'ristorazione', name: 'Ristorazione', group: 'variable' },
     { id: 'trasporti', name: 'Trasporti', group: 'variable' },
