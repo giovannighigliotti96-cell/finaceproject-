@@ -314,87 +314,89 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* ── CLOUD SYNC ───────────────────────────────────────────────────────── */}
-      <div className="card">
-        <h3 className="flex items-center gap-2 mb-3">
-          <Cloud size={16} /> Cloud Sync (GitHub Gists) - Backup Automatico
-        </h3>
-        <div style={{ background: 'var(--bg-tertiary)', padding: '0.75rem', borderRadius: 'var(--radius-md)', marginBottom: '1rem', fontSize: '0.85rem' }}>
-          <strong>✨ Backup Automatico Attivo</strong>
-          <p style={{ marginTop: '0.25rem', color: 'var(--text-muted)' }}>
-            I tuoi dati vengono salvati automaticamente su GitHub ogni 24 ore quando apri l'app. 
-            <strong> Serve solo il Token</strong> - il Gist viene creato automaticamente al primo backup!
-          </p>
-        </div>
-        
-        {/* Istruzioni dettagliate */}
-        <div style={{ background: 'var(--status-yellow-bg)', padding: '0.75rem', borderRadius: 'var(--radius-md)', marginBottom: '1rem', fontSize: '0.85rem', border: '1px solid var(--status-yellow)' }}>
-          <strong style={{ color: 'var(--status-yellow)' }}>📝 Come creare il token (2 minuti):</strong>
-          <ol style={{ marginTop: '0.5rem', marginLeft: '1.25rem', color: 'var(--text-muted)', lineHeight: '1.6' }}>
-            <li>Vai su <a href="https://github.com/settings/tokens/new?scopes=gist&description=CFO%20Backup" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--chart-primary)', textDecoration: 'underline' }}>questa pagina</a></li>
-            <li>Seleziona <strong>solo</strong> il permesso "gist" ✅</li>
-            <li>Clicca "Generate token" in fondo</li>
-            <li>Copia il token (inizia con <code>ghp_</code>)</li>
-            <li>Incollalo qui sotto e clicca "Salva Impostazioni"</li>
-          </ol>
-        </div>
-        
-        <div className="grid-2col mb-4">
-          <div>
-            <label className="kpi-label mb-2">GitHub Token (obbligatorio)</label>
-            <input 
-              type="password" 
-              value={githubToken} 
-              onChange={e => setGithubToken(e.target.value.trim())} 
-              style={inputStyle} 
-              placeholder="ghp_..." 
-            />
-            <p className="kpi-sub mt-1">
-              Il token deve iniziare con <code>ghp_</code> o <code>github_pat_</code>
+      {/* ── CLOUD SYNC (Nascosto per utenti con login su Vercel) ─────────────── */}
+      {sessionStorage.getItem('isAuthenticated') !== 'true' && (
+        <div className="card">
+          <h3 className="flex items-center gap-2 mb-3">
+            <Cloud size={16} /> Cloud Sync (GitHub Gists) - Backup Automatico
+          </h3>
+          <div style={{ background: 'var(--bg-tertiary)', padding: '0.75rem', borderRadius: 'var(--radius-md)', marginBottom: '1rem', fontSize: '0.85rem' }}>
+            <strong>✨ Backup Automatico Attivo</strong>
+            <p style={{ marginTop: '0.25rem', color: 'var(--text-muted)' }}>
+              I tuoi dati vengono salvati automaticamente su GitHub ogni 24 ore quando apri l'app. 
+              <strong> Serve solo il Token</strong> - il Gist viene creato automaticamente al primo backup!
             </p>
           </div>
-          <div>
-            <label className="kpi-label mb-2">Gist ID (opzionale - auto-generato)</label>
-            <input 
-              type="text" 
-              value={gistId} 
-              onChange={e => setGistId(e.target.value.trim())} 
-              style={inputStyle} 
-              placeholder="Lascia vuoto per crearlo automaticamente" 
-              disabled
-            />
-            <p className="kpi-sub mt-1">
-              Viene creato automaticamente al primo backup. Non modificare.
-            </p>
+          
+          {/* Istruzioni dettagliate */}
+          <div style={{ background: 'var(--status-yellow-bg)', padding: '0.75rem', borderRadius: 'var(--radius-md)', marginBottom: '1rem', fontSize: '0.85rem', border: '1px solid var(--status-yellow)' }}>
+            <strong style={{ color: 'var(--status-yellow)' }}>📝 Come creare il token (2 minuti):</strong>
+            <ol style={{ marginTop: '0.5rem', marginLeft: '1.25rem', color: 'var(--text-muted)', lineHeight: '1.6' }}>
+              <li>Vai su <a href="https://github.com/settings/tokens/new?scopes=gist&description=CFO%20Backup" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--chart-primary)', textDecoration: 'underline' }}>questa pagina</a></li>
+              <li>Seleziona <strong>solo</strong> il permesso "gist" ✅</li>
+              <li>Clicca "Generate token" in fondo</li>
+              <li>Copia il token (inizia con <code>ghp_</code>)</li>
+              <li>Incollalo qui sotto e clicca "Salva Impostazioni"</li>
+            </ol>
+          </div>
+          
+          <div className="grid-2col mb-4">
+            <div>
+              <label className="kpi-label mb-2">GitHub Token (obbligatorio)</label>
+              <input 
+                type="password" 
+                value={githubToken} 
+                onChange={e => setGithubToken(e.target.value.trim())} 
+                style={inputStyle} 
+                placeholder="ghp_..." 
+              />
+              <p className="kpi-sub mt-1">
+                Il token deve iniziare con <code>ghp_</code> o <code>github_pat_</code>
+              </p>
+            </div>
+            <div>
+              <label className="kpi-label mb-2">Gist ID (opzionale - auto-generato)</label>
+              <input 
+                type="text" 
+                value={gistId} 
+                onChange={e => setGistId(e.target.value.trim())} 
+                style={inputStyle} 
+                placeholder="Lascia vuoto per crearlo automaticamente" 
+                disabled
+              />
+              <p className="kpi-sub mt-1">
+                Viene creato automaticamente al primo backup. Non modificare.
+              </p>
+            </div>
+          </div>
+          {s.lastSync && (
+            <div className="kpi-sub mb-4" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ color: 'var(--status-green)', fontSize: '1.2rem' }}>✓</span>
+              <span>
+                Ultimo backup: <strong>{new Date(s.lastSync).toLocaleString('it-IT')}</strong>
+                {(() => {
+                  const hoursSince = (Date.now() - new Date(s.lastSync).getTime()) / (1000 * 60 * 60);
+                  if (hoursSince < 24) {
+                    return <span style={{ color: 'var(--status-green)', marginLeft: '0.5rem' }}>({Math.floor(hoursSince)}h fa)</span>;
+                  } else {
+                    return <span style={{ color: 'var(--status-yellow)', marginLeft: '0.5rem' }}>({Math.floor(hoursSince / 24)}gg fa)</span>;
+                  }
+                })()}
+              </span>
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: '1rem' }}>
+            <button onClick={handlePull} disabled={isSyncing} className="btn btn-ghost flex items-center gap-2">
+              {isSyncing ? <RefreshCw size={15} className="animate-spin" /> : <CloudDownload size={15} />}
+              Ripristina da Cloud
+            </button>
+            <button onClick={handlePush} disabled={isSyncing} className="btn btn-ghost flex items-center gap-2">
+              {isSyncing ? <RefreshCw size={15} className="animate-spin" /> : <CloudUpload size={15} />}
+              Backup Manuale Ora
+            </button>
           </div>
         </div>
-        {s.lastSync && (
-          <div className="kpi-sub mb-4" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span style={{ color: 'var(--status-green)', fontSize: '1.2rem' }}>✓</span>
-            <span>
-              Ultimo backup: <strong>{new Date(s.lastSync).toLocaleString('it-IT')}</strong>
-              {(() => {
-                const hoursSince = (Date.now() - new Date(s.lastSync).getTime()) / (1000 * 60 * 60);
-                if (hoursSince < 24) {
-                  return <span style={{ color: 'var(--status-green)', marginLeft: '0.5rem' }}>({Math.floor(hoursSince)}h fa)</span>;
-                } else {
-                  return <span style={{ color: 'var(--status-yellow)', marginLeft: '0.5rem' }}>({Math.floor(hoursSince / 24)}gg fa)</span>;
-                }
-              })()}
-            </span>
-          </div>
-        )}
-        <div style={{ display: 'flex', gap: '1rem' }}>
-          <button onClick={handlePull} disabled={isSyncing} className="btn btn-ghost flex items-center gap-2">
-            {isSyncing ? <RefreshCw size={15} className="animate-spin" /> : <CloudDownload size={15} />}
-            Ripristina da Cloud
-          </button>
-          <button onClick={handlePush} disabled={isSyncing} className="btn btn-ghost flex items-center gap-2">
-            {isSyncing ? <RefreshCw size={15} className="animate-spin" /> : <CloudUpload size={15} />}
-            Backup Manuale Ora
-          </button>
-        </div>
-      </div>
+      )}
 
       {/* ── AZIONI ───────────────────────────────────────────────────────── */}
       <div className="grid-2col">

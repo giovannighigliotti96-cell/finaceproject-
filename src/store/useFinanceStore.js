@@ -748,13 +748,25 @@ export const useFinanceStore = create(
         set(() => ({ data: initialData }));
       },
 
-      // Azioni speciali per Login/Logout su Vercel
+      // Azioni speciali per Login/Logout su Vercel (Mantengono le credenziali personalizzate)
       resetToEmpty: () => {
-        set(() => ({ data: emptyData }));
+        const { authEmail, authPassword } = get().data.settings;
+        set(() => ({ 
+          data: { 
+            ...emptyData, 
+            settings: { ...emptyData.settings, authEmail, authPassword } 
+          } 
+        }));
       },
 
       resetToDemo: () => {
-        set(() => ({ data: demoData }));
+        const { authEmail, authPassword } = get().data.settings;
+        set(() => ({ 
+          data: { 
+            ...demoData, 
+            settings: { ...demoData.settings, authEmail, authPassword } 
+          } 
+        }));
       },
 
       syncToCloud: async () => {
