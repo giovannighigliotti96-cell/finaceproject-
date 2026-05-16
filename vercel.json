@@ -1,0 +1,8 @@
+{
+  "framework": "vite",
+  "build": {
+    "env": {
+      "VITE_IS_DEMO": "true"
+    }
+  }
+}
