@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useFinanceData } from '../context/FinanceContext';
 import { useFinanceStore } from '../store/useFinanceStore';
-import { CheckCircle2, Clock, AlertCircle } from 'lucide-react';
+import { CheckCircle2, Clock, AlertCircle, Plus, Trash2, X } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { it } from 'date-fns/locale';
 import EmptyState from '../components/EmptyState';
@@ -15,6 +15,35 @@ export default function FixedCosts({ onNavigate }) {
   const incomeActual = computed.incomeActual ?? 0; // G3: per calcolo % su reddito
   const markFixedCostAsPaid = useFinanceStore(state => state.markFixedCostAsPaid);
   const unmarkFixedCostAsPaid = useFinanceStore(state => state.unmarkFixedCostAsPaid);
+  const addRecurringRule = useFinanceStore(state => state.addRecurringRule);
+  const deleteRecurringRule = useFinanceStore(state => state.deleteRecurringRule);
+
+  // Form stato
+  const [isAdding, setIsAdding] = useState(false);
+  const [newRule, setNewRule] = useState({
+    name: '',
+    amount: '',
+    dayOfMonth: 5,
+    type: 'expense',
+    startDate: '',
+    endDate: ''
+  });
+
+  const handleAddRule = (e) => {
+    e.preventDefault();
+    if (!newRule.name || !newRule.amount) return;
+    
+    addRecurringRule({
+      ...newRule,
+      amount: parseFloat(newRule.amount),
+      dayOfMonth: parseInt(newRule.dayOfMonth, 10),
+      startDate: newRule.startDate || null,
+      endDate: newRule.endDate || null,
+    });
+    
+    setIsAdding(false);
+    setNewRule({ name: '', amount: '', dayOfMonth: 5, type: 'expense', startDate: '', endDate: '' });
+  };
 
   const formatEuro = (val) =>
     new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(val);
@@ -273,12 +302,115 @@ export default function FixedCosts({ onNavigate }) {
                     </span>
                   )}
                 </div>
-                <span style={{ fontWeight: 800, fontSize: '1rem', color: isActive ? 'var(--text-primary)' : 'var(--text-muted)', minWidth: '90px', textAlign: 'right' }}>
-                  {formatEuro(rule.amount)}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <span style={{ fontWeight: 800, fontSize: '1rem', color: isActive ? 'var(--text-primary)' : 'var(--text-muted)', minWidth: '90px', textAlign: 'right' }}>
+                    {formatEuro(rule.amount)}
+                  </span>
+                  <button 
+                    onClick={() => {
+                      if(window.confirm('Vuoi davvero eliminare questo costo fisso? Le rate già pagate verranno mantenute.')) {
+                        deleteRecurringRule(rule.id);
+                      }
+                    }}
+                    style={{ background: 'transparent', border: 'none', color: 'var(--status-red)', cursor: 'pointer', padding: '0.2rem', display: 'flex', alignItems: 'center' }}
+                    title="Elimina"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               </div>
             );
           })}
+        </div>
+        
+        {/* FORM AGGIUNTA */}
+        <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border-color)' }}>
+          {!isAdding ? (
+            <button 
+              onClick={() => setIsAdding(true)}
+              className="btn btn-ghost flex items-center gap-2 w-full justify-center"
+              style={{ padding: '0.75rem', borderStyle: 'dashed' }}
+            >
+              <Plus size={16} /> Aggiungi Nuovo Costo Fisso
+            </button>
+          ) : (
+            <form onSubmit={handleAddRule} className="animate-fade-in" style={{ background: 'var(--bg-tertiary)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+              <div className="flex justify-between items-center mb-3">
+                <h4 style={{ margin: 0 }}>Nuova Regola Ricorrente</h4>
+                <button type="button" onClick={() => setIsAdding(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                  <X size={16} />
+                </button>
+              </div>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div>
+                  <label className="kpi-label mb-1">Nome Spesa</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={newRule.name}
+                    onChange={e => setNewRule({...newRule, name: e.target.value})}
+                    placeholder="es. Palestra"
+                    style={{ width: '100%', padding: '0.5rem', background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)' }}
+                  />
+                </div>
+                <div>
+                  <label className="kpi-label mb-1">Importo (€)</label>
+                  <input 
+                    type="number" 
+                    required
+                    min={0.1}
+                    step={0.01}
+                    value={newRule.amount}
+                    onChange={e => setNewRule({...newRule, amount: e.target.value})}
+                    placeholder="es. 50"
+                    style={{ width: '100%', padding: '0.5rem', background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)' }}
+                  />
+                </div>
+              </div>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                <div>
+                  <label className="kpi-label mb-1">Giorno d'addebito</label>
+                  <input 
+                    type="number" 
+                    required
+                    min={1} max={31}
+                    value={newRule.dayOfMonth}
+                    onChange={e => setNewRule({...newRule, dayOfMonth: e.target.value})}
+                    style={{ width: '100%', padding: '0.5rem', background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)' }}
+                  />
+                </div>
+                <div>
+                  <label className="kpi-label mb-1">Inizia da (opzionale)</label>
+                  <input 
+                    type="month" 
+                    value={newRule.startDate}
+                    onChange={e => setNewRule({...newRule, startDate: e.target.value})}
+                    style={{ width: '100%', padding: '0.5rem', background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)' }}
+                  />
+                </div>
+                <div>
+                  <label className="kpi-label mb-1">Termina a (opzionale)</label>
+                  <input 
+                    type="month" 
+                    value={newRule.endDate}
+                    onChange={e => setNewRule({...newRule, endDate: e.target.value})}
+                    style={{ width: '100%', padding: '0.5rem', background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)' }}
+                  />
+                </div>
+              </div>
+              
+              <div className="flex justify-end gap-3">
+                <button type="button" onClick={() => setIsAdding(false)} className="btn btn-ghost" style={{ padding: '0.5rem 1rem' }}>
+                  Annulla
+                </button>
+                <button type="submit" className="btn btn-primary" style={{ padding: '0.5rem 1.5rem' }}>
+                  Salva Regola
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       </div>
 

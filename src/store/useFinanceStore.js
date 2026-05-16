@@ -56,7 +56,7 @@ const emptyData = {
   periods: [],
   accounts: [],
   liabilities: [],
-  recurringRules: RECURRING_RULES,
+  recurringRules: [],
   transactions: [],
   categories: [
     { id: 'famiglia', name: 'Famiglia', group: 'fixed' },
@@ -696,8 +696,65 @@ export const useFinanceStore = create(
             transactions: state.data.transactions.filter(t =>
               !(t.status === 'planned' && t.categoryId === ruleId.replace('rule_', ''))
             ),
+            auditLog: appendAudit(state.data.auditLog, 'DELETE_RECURRING_RULE', { ruleId }),
           },
         })),
+        
+      // Alias per coerenza UI
+      deleteRecurringRule: (ruleId) => get().purgeRecurringRule(ruleId),
+
+      // ── AGGIUNGI REGOLA RICORRENTE ─────────────────────────────────────────
+      addRecurringRule: (rule) =>
+        set(state => {
+          const { data } = state;
+          const newRule = { ...rule, id: `rule_${Date.now()}` };
+          const updatedRules = [...(data.recurringRules || []), newRule];
+          
+          let newTransactions = [];
+          const activePeriod = data.periods.find(p => p.id === data.settings.activePeriodId);
+          if (activePeriod) {
+            const startDateObj = parse(activePeriod.startDate, 'yyyy-MM-dd', new Date());
+            // Genera la transazione pianificata SOLO per questa nuova regola, se valida per il ciclo in corso
+            newTransactions = generatePlannedFixedCosts(activePeriod.id, startDateObj, [newRule]);
+          }
+
+          return {
+            data: {
+              ...data,
+              recurringRules: updatedRules,
+              transactions: [...data.transactions, ...newTransactions],
+              auditLog: appendAudit(data.auditLog, 'ADD_RECURRING_RULE', { ruleName: rule.name }),
+            },
+          };
+        }),
+
+      // ── AGGIORNA REGOLA RICORRENTE ─────────────────────────────────────────
+      updateRecurringRule: (ruleId, updates) =>
+        set(state => {
+          const { data } = state;
+          const updatedRules = (data.recurringRules || []).map(r => r.id === ruleId ? { ...r, ...updates } : r);
+          
+          // Aggiorna ANCHE le transazioni PLANNED per questa regola nel ciclo attivo
+          const updatedTransactions = data.transactions.map(t => {
+            if (t.status === 'planned' && t.categoryId === ruleId.replace('rule_', '')) {
+              return { 
+                ...t, 
+                amount: updates.amount !== undefined ? Number(updates.amount) : t.amount,
+                description: updates.name || t.description
+              };
+            }
+            return t;
+          });
+
+          return {
+            data: {
+              ...data,
+              recurringRules: updatedRules,
+              transactions: updatedTransactions,
+              auditLog: appendAudit(data.auditLog, 'UPDATE_RECURRING_RULE', { ruleId }),
+            },
+          };
+        }),
 
       // ── RICONCILIA SALDO CONTO OPERATIVO ─────────────────────────────────
       // Ricalcola il saldo reale di acc_main partendo dall'openingBalance del ciclo attivo.
