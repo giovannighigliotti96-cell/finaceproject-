@@ -171,35 +171,37 @@ export default function Settings() {
         <p className="kpi-sub">Configura i parametri chiave del tuo CFO Personale.</p>
       </div>
 
-      {/* ── AUTENTICAZIONE ───────────────────────────────────────────── */}
-      <div className="card">
-        <h3 className="flex items-center gap-2 mb-5">
-          <Shield size={16} /> Credenziali di Accesso
-        </h3>
-        <p className="kpi-sub mb-4">
-          Modifica la mail e la password usate per accedere a questa dashboard.
-        </p>
-        <div className="grid-2col">
-          <div>
-            <label className="kpi-label mb-2">Email di Accesso</label>
-            <input
-              type="email"
-              value={authEmail}
-              onChange={e => setAuthEmail(e.target.value)}
-              style={inputStyle}
-            />
-          </div>
-          <div>
-            <label className="kpi-label mb-2">Password di Accesso</label>
-            <input
-              type="text"
-              value={authPassword}
-              onChange={e => setAuthPassword(e.target.value)}
-              style={inputStyle}
-            />
+      {/* ── AUTENTICAZIONE (Visibile solo per utenti con login su Vercel) ──────── */}
+      {sessionStorage.getItem('isAuthenticated') === 'true' && (
+        <div className="card">
+          <h3 className="flex items-center gap-2 mb-5">
+            <Shield size={16} /> Credenziali di Accesso
+          </h3>
+          <p className="kpi-sub mb-4">
+            Modifica la mail e la password usate per accedere a questa dashboard.
+          </p>
+          <div className="grid-2col">
+            <div>
+              <label className="kpi-label mb-2">Email di Accesso</label>
+              <input
+                type="email"
+                value={authEmail}
+                onChange={e => setAuthEmail(e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <label className="kpi-label mb-2">Password di Accesso</label>
+              <input
+                type="text"
+                value={authPassword}
+                onChange={e => setAuthPassword(e.target.value)}
+                style={inputStyle}
+              />
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* ── PARAMETRI FINANZIARI ───────────────────────────────────────────── */}
       <div className="card">
