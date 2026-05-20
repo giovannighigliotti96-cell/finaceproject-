@@ -45,6 +45,16 @@ const emptyData = {
     firebaseUid: null,
     authEmail: 'admin@finance.it',
     authPassword: 'admin',
+    pensionConfig: {
+      tfrDestination: 'fondo', // 'fondo' o 'azienda'
+      currentTfr: 0,
+      monthlyContribution: 173,
+      currentAge: 30,
+      retirementAge: 67,
+      annualReturn: 3.5,
+      voluntaryContributionPercentage: 0,
+      employerContributionPercentage: 1.5
+    },
   },
   categorizationRules: [
     { pattern: 'esselunga|coop|pam|carrefour|conad|lidl|aldi|crai', categoryId: 'alimentari' },
@@ -215,6 +225,20 @@ export const useFinanceStore = create(
 
       updateSettings: (updates) =>
         set(state => ({ data: { ...state.data, settings: { ...state.data.settings, ...updates } } })),
+
+      updatePensionConfig: (updates) =>
+        set(state => ({
+          data: {
+            ...state.data,
+            settings: {
+              ...state.data.settings,
+              pensionConfig: {
+                ...state.data.settings.pensionConfig,
+                ...updates
+              }
+            }
+          }
+        })),
 
       updatePeriod: (id, updates) =>
         set(state => ({
