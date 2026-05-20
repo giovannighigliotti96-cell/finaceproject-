@@ -19,6 +19,7 @@ import {
   FileUp,
   Cloud,
   Briefcase,
+  Bot,
 } from 'lucide-react';
 import { useSyncStore } from '../hooks/useFirebaseSync';
 import ErrorBoundary from './ErrorBoundary';
@@ -41,6 +42,7 @@ const navItems = [
   { id: 'accounts', label: 'Conti & Patrimonio', icon: Landmark },
   { id: 'admin', label: 'Admin / Setup', icon: ShieldCheck },
   { id: 'pension', label: 'Previdenza', icon: Briefcase },
+  { id: 'advisor', label: 'AI Advisor', icon: Bot },
   { id: 'import', label: 'Import Banca', icon: FileUp },
   { id: 'period-close', label: 'Chiudi Ciclo', icon: Lock },
   { id: 'goals', label: 'Obiettivi', icon: Target },

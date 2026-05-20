@@ -21,6 +21,7 @@ const PeriodClose = lazy(() => import('./views/PeriodClose'));
 const SettingsView = lazy(() => import('./views/Settings'));
 const ImportBanca = lazy(() => import('./views/ImportBanca'));
 const Pension = lazy(() => import('./views/Pension'));
+const AiAdvisor = lazy(() => import('./views/AiAdvisor'));
 
 import './index.css';
 
@@ -110,6 +111,7 @@ const router = createHashRouter([
       { path: 'period-close', element: <PeriodClose /> },
       { path: 'goals', element: <Goals /> },
       { path: 'pension', element: <Pension /> },
+      { path: 'advisor', element: <AiAdvisor /> },
       { path: 'settings', element: <SettingsView /> },
       { path: 'import', element: <ImportBanca /> },
       { path: '*', element: <Navigate to="/" replace /> },
