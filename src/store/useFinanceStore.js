@@ -402,7 +402,7 @@ export const useFinanceStore = create(
           if (!tx || tx.status !== 'paid') return state;
 
           const updatedTransactions = state.data.transactions.map(t =>
-            t.id === transactionId ? { ...t, status: 'planned', paidAt: undefined } : t
+            t.id === transactionId ? { ...t, status: 'planned', paidAt: null } : t
           );
           let updatedAccounts = state.data.accounts.map(acc => {
             if (acc.id !== tx.accountId) return acc;
