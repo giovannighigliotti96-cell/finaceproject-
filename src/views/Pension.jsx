@@ -2,242 +2,380 @@ import React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useFinanceStore } from '../store/useFinanceStore';
 import { usePensionProjection } from '../hooks/computed/usePensionProjection';
-import { Briefcase, TrendingUp, ShieldCheck, Info, PiggyBank, Scale } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import {
+  Briefcase, TrendingUp, ShieldCheck, PiggyBank,
+  Scale, AlertCircle, CheckCircle2, Info
+} from 'lucide-react';
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Legend
+} from 'recharts';
+
+const formatEuro = (val) =>
+  new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(val ?? 0);
+
+const inputStyle = {
+  width: '100%',
+  padding: '0.65rem 0.75rem',
+  background: 'var(--bg-tertiary)',
+  border: '1px solid var(--border-color)',
+  borderRadius: 'var(--radius-md)',
+  color: 'var(--text-primary)',
+  fontSize: '0.9rem',
+};
+
+const labelStyle = {
+  display: 'block',
+  fontSize: '0.7rem',
+  fontWeight: 700,
+  textTransform: 'uppercase',
+  letterSpacing: '0.08em',
+  color: 'var(--text-muted)',
+  marginBottom: '0.4rem',
+};
+
+function FormField({ label, children }) {
+  return (
+    <div>
+      <label style={labelStyle}>{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function KpiCard({ icon: Icon, label, value, sub, color, borderColor }) {
+  return (
+    <div className="card" style={{ borderTop: `3px solid ${borderColor || 'var(--border-color)'}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
+        {Icon && <Icon size={14} color={color || 'var(--text-muted)'} />}
+        <span style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)' }}>{label}</span>
+      </div>
+      <div style={{ fontSize: '1.6rem', fontWeight: 900, color: color || 'var(--text-primary)', lineHeight: 1 }}>{value}</div>
+      {sub && <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.4rem', lineHeight: 1.3 }}>{sub}</p>}
+    </div>
+  );
+}
 
 export default function Pension() {
-  const formatEuro = (val) => new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(val);
-  const config = useFinanceStore(useShallow(state => state.data.settings?.pensionConfig || {}));
+  const cfg = useFinanceStore(useShallow(state => state.data.settings?.pensionConfig || {}));
   const updatePensionConfig = useFinanceStore(state => state.updatePensionConfig);
-  
-  const {
-    tfrDest,
-    grossBalanceAtRetirement,
-    applicableTaxRate,
-    netBalanceAtRetirement,
-    realPowerOfPurchase,
-    projectionChartData,
-    totalInvested
-  } = usePensionProjection();
 
-  const handleUpdate = (key, value) => {
-    updatePensionConfig({ [key]: value });
-  };
+  const proj = usePensionProjection();
 
-  const handleToggleVoluntary = (e) => {
-    const isChecked = e.target.checked;
-    updatePensionConfig({
-      voluntaryContributionPercentage: isChecked ? 1.5 : 0
-    });
-  };
+  const set = (key, val) => updatePensionConfig({ [key]: val });
 
-  const isVoluntaryActive = config.voluntaryContributionPercentage > 0;
+  const isVoluntaryActive = (Number(cfg.voluntaryContributionPercentage) || 0) > 0;
 
   return (
-    <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '1rem', paddingBottom: '100px' }}>
-      <header className="mb-6">
-        <h1 className="text-3xl font-bold" style={{ color: 'var(--text-primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Briefcase size={28} color="var(--chart-primary)" />
+    <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '1.5rem', paddingBottom: '100px' }}>
+
+      {/* ── HEADER ── */}
+      <header style={{ marginBottom: '1.5rem' }}>
+        <h1 style={{ fontSize: '1.6rem', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.3rem' }}>
+          <Briefcase size={26} color="var(--chart-primary)" />
           Previdenza & TFR
         </h1>
-        <p className="kpi-sub" style={{ fontSize: '1rem', maxWidth: '800px' }}>
-          Proiezione del capitale pensionistico cumulato nel tempo. Confronta l'opzione "Fondo Pensione" con il "TFR in Azienda" e analizza il reale potere d'acquisto decurtato dall'inflazione (stimata 2% annuo).
+        <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', maxWidth: '700px', lineHeight: 1.5 }}>
+          Proiezione del montante previdenziale con correzione automatica del mismatch temporale tra estratto conto del portale e TFR realmente maturato in azienda ad oggi.
         </p>
       </header>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', alignItems: 'flex-start' }}>
-        
-        {/* COLONNA SINISTRA: CONFIGURAZIONE */}
-        <div className="card" style={{ flex: '1 1 350px', position: 'sticky', top: '1rem' }}>
-          <h2 className="text-xl font-bold mb-4" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Scale size={20} color="var(--chart-secondary)" />
+
+        {/* ── COLONNA SINISTRA: FORM ── */}
+        <div className="card" style={{ flex: '0 0 340px', position: 'sticky', top: '1rem' }}>
+          <h2 style={{ fontSize: '1rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem' }}>
+            <Scale size={18} color="var(--chart-secondary)" />
             Parametri Simulazione
           </h2>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div>
-              <label className="kpi-label mb-2 block">Destinazione TFR</label>
-              <select 
-                value={config.tfrDestination}
-                onChange={(e) => handleUpdate('tfrDestination', e.target.value)}
-                style={{
-                  width: '100%', padding: '0.75rem', background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)'
-                }}
+
+            {/* Destinazione TFR */}
+            <FormField label="Destinazione TFR">
+              <select
+                value={cfg.tfrDestination || 'fondo'}
+                onChange={e => set('tfrDestination', e.target.value)}
+                style={inputStyle}
               >
-                <option value="fondo">Fondo Pensione / Mercato (Rendimento variabile, agevolazioni fiscali)</option>
-                <option value="azienda">TFR in Azienda / INPS (Rivalutazione legale, tassazione ordinaria)</option>
+                <option value="fondo">Fondo Pensione / Comparto Mercato</option>
+                <option value="azienda">TFR in Azienda / INPS (legge)</option>
               </select>
-            </div>
+            </FormField>
 
-            <div>
-              <label className="kpi-label mb-2 block">TFR Attuale / Capitale Iniziale (€)</label>
-              <input 
-                type="number"
-                value={config.currentTfr}
-                onChange={(e) => handleUpdate('currentTfr', parseFloat(e.target.value) || 0)}
-                style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)' }}
-              />
-            </div>
-
-            <div>
-              <label className="kpi-label mb-2 block">Contributo Mensile (TFR Lordo) (€)</label>
-              <input 
-                type="number"
-                value={config.monthlyContribution}
-                onChange={(e) => handleUpdate('monthlyContribution', parseFloat(e.target.value) || 0)}
-                style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)' }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', gap: '1rem' }}>
-              <div style={{ flex: 1 }}>
-                <label className="kpi-label mb-2 block">Età Attuale</label>
-                <input 
-                  type="number"
-                  value={config.currentAge}
-                  onChange={(e) => handleUpdate('currentAge', parseInt(e.target.value) || 0)}
-                  style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)' }}
-                />
+            {/* Divider */}
+            <div style={{ borderTop: '1px dashed var(--border-color)', paddingTop: '0.75rem' }}>
+              <div style={{ fontSize: '0.68rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--chart-secondary)', marginBottom: '0.75rem' }}>
+                📋 Estratto Conto Portale Fondo
               </div>
-              <div style={{ flex: 1 }}>
-                <label className="kpi-label mb-2 block">Età Pensione</label>
-                <input 
-                  type="number"
-                  value={config.retirementAge}
-                  onChange={(e) => handleUpdate('retirementAge', parseInt(e.target.value) || 0)}
-                  style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)' }}
-                />
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <FormField label="Saldo Ufficiale Portale (€)">
+                  <input
+                    type="number" min="0" style={inputStyle}
+                    value={cfg.currentTfrBalance ?? 0}
+                    onChange={e => set('currentTfrBalance', parseFloat(e.target.value) || 0)}
+                  />
+                  <p style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
+                    Il saldo che vedi sul portale del fondo (può essere "vecchio").
+                  </p>
+                </FormField>
+
+                <FormField label="Mese Competenza Estratto Conto">
+                  <input
+                    type="month" style={inputStyle}
+                    value={cfg.lastStatementDate || '2025-12'}
+                    onChange={e => set('lastStatementDate', e.target.value)}
+                  />
+                  <p style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
+                    A quale mese si riferisce il saldo sopra? Le aziende versano con ritardo.
+                  </p>
+                </FormField>
+
+                <FormField label="Quota TFR Mensile in Busta Paga (€)">
+                  <input
+                    type="number" min="0" step="1" style={inputStyle}
+                    value={cfg.monthlyAccrual ?? 175}
+                    onChange={e => set('monthlyAccrual', parseFloat(e.target.value) || 0)}
+                  />
+                </FormField>
               </div>
             </div>
 
-            {config.tfrDestination === 'fondo' && (
-              <div>
-                <label className="kpi-label mb-2 block">Rendimento Annuo Stimato (%)</label>
-                <input 
-                  type="number" step="0.1"
-                  value={config.annualReturn}
-                  onChange={(e) => handleUpdate('annualReturn', parseFloat(e.target.value) || 0)}
-                  style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)' }}
-                />
-                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>*Applicato in modo composto mensilmente.</p>
+            {/* Gap Banner */}
+            {proj.gapMonths > 0 && (
+              <div style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.4)', borderRadius: 'var(--radius-md)', padding: '0.75rem' }}>
+                <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#818cf8', marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <AlertCircle size={13} /> Gap rilevato: {proj.gapMonths} mesi
+                </div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                  L'app aggiunge <strong style={{ color: '#a5b4fc' }}>{formatEuro(proj.gapAccrued)}</strong> già maturati in azienda e non ancora contabilizzati sul portale.
+                </div>
               </div>
             )}
 
-            {config.tfrDestination === 'azienda' && (
-              <div className="p-3 mt-2 rounded" style={{ background: 'var(--status-yellow-bg)', border: '1px solid var(--status-yellow)' }}>
-                <p className="text-xs" style={{ color: 'var(--status-yellow)' }}>
-                  <strong>Nota:</strong> Stai simulando il TFR lasciato in azienda. Il rendimento stimato inserito viene ignorato e sostituito dalla rivalutazione di legge italiana: 1.5% fisso + 75% inflazione (stimata al 2%). Rendimento lordo totale applicato: ~3% annuo.
+            {/* Divider */}
+            <div style={{ borderTop: '1px dashed var(--border-color)', paddingTop: '0.75rem' }}>
+              <div style={{ fontSize: '0.68rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                👤 Dati Personali & Proiezione
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <FormField label="Età Attuale">
+                  <input
+                    type="number" min="18" max="80" style={inputStyle}
+                    value={cfg.currentAge ?? 30}
+                    onChange={e => set('currentAge', parseInt(e.target.value) || 30)}
+                  />
+                </FormField>
+                <FormField label="Età Pensione">
+                  <input
+                    type="number" min="50" max="80" style={inputStyle}
+                    value={cfg.retirementAge ?? 67}
+                    onChange={e => set('retirementAge', parseInt(e.target.value) || 67)}
+                  />
+                </FormField>
+              </div>
+            </div>
+
+            {/* Rendimento (solo fondo) */}
+            {cfg.tfrDestination !== 'azienda' && (
+              <FormField label="Rendimento Annuo Stimato (%)">
+                <input
+                  type="number" min="0" max="20" step="0.1" style={inputStyle}
+                  value={cfg.annualReturn ?? 3.5}
+                  onChange={e => set('annualReturn', parseFloat(e.target.value) || 0)}
+                />
+                <p style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
+                  Capitalizzato mensilmente (tasso / 12).
+                </p>
+              </FormField>
+            )}
+
+            {cfg.tfrDestination === 'azienda' && (
+              <div style={{ background: 'var(--status-yellow-bg)', border: '1px solid var(--status-yellow)', borderRadius: 'var(--radius-md)', padding: '0.75rem' }}>
+                <p style={{ fontSize: '0.72rem', color: 'var(--status-yellow)', lineHeight: 1.4 }}>
+                  <strong>Rivalutazione INPS applicata:</strong> 1.5% fisso + 75% inflazione (2%) = ~3% annuo. Tassazione uscita: 23% flat (IRPEF media).
                 </p>
               </div>
             )}
 
-            {/* Contribuzione Volontaria (Solo se Fondo Pensione) */}
-            {config.tfrDestination === 'fondo' && (
-              <div className="p-4 mt-2 rounded" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-color)' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}>
-                  <input 
+            {/* Contribuzione Volontaria (solo fondo) */}
+            {cfg.tfrDestination !== 'azienda' && (
+              <div style={{ borderTop: '1px dashed var(--border-color)', paddingTop: '0.75rem' }}>
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: 'pointer' }}>
+                  <input
                     type="checkbox"
                     checked={isVoluntaryActive}
-                    onChange={handleToggleVoluntary}
-                    style={{ width: '18px', height: '18px', accentColor: 'var(--chart-primary)' }}
+                    onChange={e => set('voluntaryContributionPercentage', e.target.checked ? 1.5 : 0)}
+                    style={{ marginTop: '2px', width: '16px', height: '16px', accentColor: 'var(--chart-primary)', flexShrink: 0 }}
                   />
-                  <span className="font-bold" style={{ fontSize: '0.9rem' }}>Attiva Contribuzione Volontaria (1.5%)</span>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>Attiva Contribuzione Volontaria (1.5%)</div>
+                    <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.2rem', lineHeight: 1.4 }}>
+                      Versando l'1.5% del reddito, il datore di lavoro aggiunge un ulteriore 1.5% gratuito.
+                    </p>
+                  </div>
                 </label>
-                <p className="text-xs mt-2" style={{ color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                  Versando l'1.5% del tuo stipendio, hai diritto al <strong>contributo del datore di lavoro (1.5%)</strong>. I contributi volontari e datoriali si sommeranno al TFR generando maggiore interesse composto.
-                </p>
               </div>
             )}
 
           </div>
         </div>
 
-        {/* COLONNA DESTRA: RISULTATI E GRAFICI */}
-        <div style={{ flex: '1 1 600px', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          
-          {/* KPI */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-            
-            <div className="card" style={{ borderTop: '3px solid var(--chart-tertiary)' }}>
-              <div className="kpi-label mb-1 flex items-center gap-2"><TrendingUp size={16} /> Capitale Lordo Maturato</div>
-              <div className="kpi-value text-2xl">{formatEuro(grossBalanceAtRetirement)}</div>
-              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Capitale versato: {formatEuro(totalInvested)}</p>
-            </div>
+        {/* ── COLONNA DESTRA: KPI + CHART ── */}
+        <div style={{ flex: '1 1 600px', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
 
-            <div className="card" style={{ borderTop: '3px solid var(--status-red)' }}>
-              <div className="kpi-label mb-1 flex items-center gap-2"><Info size={16} /> Tassazione (Uscita)</div>
-              <div className="kpi-value text-2xl" style={{ color: 'var(--status-red)' }}>
-                {(applicableTaxRate * 100).toFixed(2)}%
+          {/* KPI Grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '1rem' }}>
+
+            <div className="card" style={{ borderTop: '3px solid #818cf8', background: 'rgba(99,102,241,0.06)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
+                <CheckCircle2 size={14} color="#818cf8" />
+                <span style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)' }}>Saldo Reale Stimato Ad Oggi</span>
               </div>
-              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-                {tfrDest === 'fondo' ? `Agevolazione Fondo Pensione applicata` : `Aliquota Media Irpef Standard (Flat)`}
+              <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#a5b4fc', lineHeight: 1 }}>
+                {formatEuro(proj.realCurrentBalance)}
+              </div>
+              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.4rem', lineHeight: 1.3 }}>
+                Portale: {formatEuro(Number(cfg.currentTfrBalance) || 0)} + {proj.gapMonths} mesi non contabilizzati ({formatEuro(proj.gapAccrued)})
               </p>
             </div>
 
-            <div className="card" style={{ borderTop: '3px solid var(--status-green)' }}>
-              <div className="kpi-label mb-1 flex items-center gap-2"><PiggyBank size={16} /> Capitale Netto Liquidato</div>
-              <div className="kpi-value text-2xl" style={{ color: 'var(--status-green)' }}>{formatEuro(netBalanceAtRetirement)}</div>
-              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Quello che riceverai sul conto</p>
+            <KpiCard
+              icon={TrendingUp}
+              label="Capitale Lordo a Pensione"
+              value={formatEuro(proj.grossBalanceAtRetirement)}
+              sub={`Versato totale: ${formatEuro(proj.totalInvested)}`}
+              color="var(--chart-tertiary)"
+              borderColor="var(--chart-tertiary)"
+            />
+
+            <div className="card" style={{ borderTop: '3px solid var(--status-red)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
+                <Info size={14} color="var(--status-red)" />
+                <span style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)' }}>Tassazione Uscita</span>
+              </div>
+              <div style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--status-red)', lineHeight: 1 }}>
+                {(proj.applicableTaxRate * 100).toFixed(1)}%
+              </div>
+              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.4rem', lineHeight: 1.3 }}>
+                {proj.tfrDest === 'fondo'
+                  ? `Agevolazione FP: max 15% → min 9%`
+                  : 'IRPEF media standard (flat 23%)'}
+              </p>
             </div>
 
-            <div className="card" style={{ borderTop: '3px solid var(--chart-primary)' }}>
-              <div className="kpi-label mb-1 flex items-center gap-2"><ShieldCheck size={16} /> Valore Reale (Potere d'Acquisto)</div>
-              <div className="kpi-value text-2xl" style={{ color: 'var(--chart-primary)' }}>{formatEuro(realPowerOfPurchase)}</div>
-              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Netto svalutato dell'inflazione 2%</p>
+            <KpiCard
+              icon={PiggyBank}
+              label="Capitale Netto Liquidato"
+              value={formatEuro(proj.netBalanceAtRetirement)}
+              sub="Quello che riceverai sul conto"
+              color="var(--status-green)"
+              borderColor="var(--status-green)"
+            />
+
+            <div className="card" style={{ borderTop: '3px solid var(--chart-primary)', gridColumn: 'span 1' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
+                <ShieldCheck size={14} color="var(--chart-primary)" />
+                <span style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)' }}>Potere d'Acquisto Reale</span>
+              </div>
+              <div style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--chart-primary)', lineHeight: 1 }}>
+                {formatEuro(proj.realPowerOfPurchase)}
+              </div>
+              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.4rem', lineHeight: 1.3 }}>
+                Netto svalutato per inflazione 2%/anno
+              </p>
             </div>
 
           </div>
 
           {/* CHART */}
-          <div className="card flex-1">
-            <h3 className="text-lg font-bold mb-4">Proiezione a Lungo Termine</h3>
-            
-            <div style={{ height: '400px', width: '100%' }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart
-                  data={projectionChartData}
-                  margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-                >
-                  <defs>
-                    <linearGradient id="colorNominal" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="var(--chart-tertiary)" stopOpacity={0.8}/>
-                      <stop offset="95%" stopColor="var(--chart-tertiary)" stopOpacity={0}/>
-                    </linearGradient>
-                    <linearGradient id="colorReal" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="var(--chart-primary)" stopOpacity={0.8}/>
-                      <stop offset="95%" stopColor="var(--chart-primary)" stopOpacity={0}/>
-                    </linearGradient>
-                    <linearGradient id="colorInvested" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="var(--text-muted)" stopOpacity={0.5}/>
-                      <stop offset="95%" stopColor="var(--text-muted)" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" vertical={false} />
-                  <XAxis dataKey="age" tick={{ fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} />
-                  <YAxis 
-                    tickFormatter={(val) => `€${(val / 1000).toFixed(0)}k`} 
-                    tick={{ fill: 'var(--text-muted)' }} 
-                    tickLine={false} 
-                    axisLine={false} 
-                    width={80}
-                  />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)' }}
-                    itemStyle={{ color: 'var(--text-primary)', fontWeight: 600 }}
-                    formatter={(value) => [formatEuro(value), '']}
-                    labelFormatter={(label) => `Età: ${label}`}
-                  />
-                  <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                  <Area type="monotone" name="Capitale Nominale" dataKey="nominalBalance" stroke="var(--chart-tertiary)" fillOpacity={1} fill="url(#colorNominal)" />
-                  <Area type="monotone" name="Potere d'Acquisto Reale" dataKey="realBalance" stroke="var(--chart-primary)" fillOpacity={1} fill="url(#colorReal)" />
-                  <Area type="monotone" name="Capitale Versato (TFR + Contr.)" dataKey="invested" stroke="var(--text-muted)" fillOpacity={0.5} fill="url(#colorInvested)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+          <div className="card">
+            <h3 style={{ fontSize: '1rem', fontWeight: 800, marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <TrendingUp size={18} color="var(--chart-primary)" />
+              Proiezione a Lungo Termine — Nominale vs Potere d'Acquisto Reale
+            </h3>
+
+            <ResponsiveContainer width="100%" height={380}>
+              <AreaChart data={proj.projectionChartData} margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="gNominal" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--chart-tertiary)" stopOpacity={0.6} />
+                    <stop offset="95%" stopColor="var(--chart-tertiary)" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gReal" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--chart-primary)" stopOpacity={0.6} />
+                    <stop offset="95%" stopColor="var(--chart-primary)" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gInvested" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--text-muted)" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="var(--text-muted)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" vertical={false} />
+                <XAxis
+                  dataKey="age"
+                  tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={v => `${v} anni`}
+                />
+                <YAxis
+                  tickFormatter={v => `€${(v / 1000).toFixed(0)}k`}
+                  tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
+                  tickLine={false}
+                  axisLine={false}
+                  width={72}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-md)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.8rem',
+                  }}
+                  formatter={(value, name) => [formatEuro(value), name]}
+                  labelFormatter={label => `Età: ${label} anni`}
+                />
+                <Legend
+                  wrapperStyle={{ fontSize: '0.78rem', paddingTop: '16px' }}
+                  iconType="circle"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="nominalBalance"
+                  name="Capitale Nominale"
+                  stroke="var(--chart-tertiary)"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#gNominal)"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="realBalance"
+                  name="Potere d'Acquisto Reale"
+                  stroke="var(--chart-primary)"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#gReal)"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="invested"
+                  name="Capitale Versato"
+                  stroke="var(--text-muted)"
+                  strokeWidth={1.5}
+                  strokeDasharray="4 3"
+                  fillOpacity={1}
+                  fill="url(#gInvested)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
 
         </div>
-
       </div>
     </div>
   );

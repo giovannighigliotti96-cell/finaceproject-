@@ -2,109 +2,125 @@ import { useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useFinanceStore } from '../../store/useFinanceStore';
 
+const INFLATION_RATE = 0.02; // 2% annuo fisso
+
+/**
+ * Calcola la differenza in mesi interi tra una data YYYY-MM e la data corrente.
+ * Restituisce un valore >= 0.
+ */
+function calcMonthsGap(lastStatementDate) {
+  try {
+    const [yearStr, monthStr] = String(lastStatementDate).split('-');
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10); // 1–12
+    if (isNaN(year) || isNaN(month)) return 0;
+
+    const now = new Date();
+    const nowYear = now.getFullYear();
+    const nowMonth = now.getMonth() + 1; // 1–12
+
+    const gap = (nowYear - year) * 12 + (nowMonth - month);
+    return Math.max(0, gap);
+  } catch {
+    return 0;
+  }
+}
+
 export function usePensionProjection() {
-  const pensionConfig = useFinanceStore(useShallow(state => state.data.settings?.pensionConfig || {}));
+  const cfg = useFinanceStore(
+    useShallow(state => state.data.settings?.pensionConfig || {})
+  );
   const defaultIncome = useFinanceStore(state => state.data.settings?.defaultIncome || 0);
-  const inflationRate = 0.02; // Inflazione stimata fissa al 2%
 
   return useMemo(() => {
-    // Sanitizzazione degli input
-    const tfrDest = pensionConfig.tfrDestination === 'azienda' ? 'azienda' : 'fondo';
-    const currentTfr = Number(pensionConfig.currentTfr) || 0;
-    const monthlyCont = Number(pensionConfig.monthlyContribution) || 0;
-    const currentAge = Number(pensionConfig.currentAge) || 30;
-    const retirementAge = Number(pensionConfig.retirementAge) || 67;
-    const annualReturn = Number(pensionConfig.annualReturn) || 0;
-    const volContPerc = Number(pensionConfig.voluntaryContributionPercentage) || 0;
-    const empContPerc = Number(pensionConfig.employerContributionPercentage) || 0;
+    // ── Sanitizzazione Input ─────────────────────────────────────────────────
+    const tfrDest = cfg.tfrDestination === 'azienda' ? 'azienda' : 'fondo';
+    const portalBalance  = Number(cfg.currentTfrBalance) || 0;
+    const lastStatement  = cfg.lastStatementDate || '2025-12';
+    const monthlyAccrual = Number(cfg.monthlyAccrual) || 0;
+    const currentAge     = Math.max(18, Number(cfg.currentAge) || 30);
+    const retirementAge  = Math.max(currentAge + 1, Number(cfg.retirementAge) || 67);
+    const annualReturn   = Number(cfg.annualReturn) || 0;
+    const volPerc        = Number(cfg.voluntaryContributionPercentage) || 0;
+    const empPerc        = Number(cfg.employerContributionPercentage) || 0;
 
-    const yearsToRetirement = Math.max(0, retirementAge - currentAge);
-    const monthsToRetirement = yearsToRetirement * 12;
+    // ── Step 1: Gap temporale (mesi tra estratto conto e OGGI) ───────────────
+    const gapMonths = calcMonthsGap(lastStatement);
+    // Saldo reale ad oggi = saldo portale + quote accumulate nei mesi di gap
+    const gapAccrued        = gapMonths * monthlyAccrual;
+    const realCurrentBalance = portalBalance + gapAccrued;
 
-    // Calcolo del contributo volontario e datoriale in base alla % (se attivato)
-    const voluntaryAmount = (defaultIncome * volContPerc) / 100;
-    const employerAmount = volContPerc > 0 ? (defaultIncome * empContPerc) / 100 : 0;
-    const totalMonthlyContribution = monthlyCont + voluntaryAmount + employerAmount;
+    // ── Step 2: Contributo mensile totale da OGGI alla pensione ──────────────
+    const voluntaryAmount = (defaultIncome * volPerc) / 100;
+    const employerAmount  = volPerc > 0 ? (defaultIncome * empPerc) / 100 : 0;
+    // Il contributo mensile totale è: quota TFR busta paga + eventuale volontario + datoriale
+    const totalMonthlyContribution = monthlyAccrual + voluntaryAmount + employerAmount;
 
-    // Logica di capitalizzazione basata sulla destinazione
-    let nominalBalance = currentTfr;
-    let totalInvested = currentTfr;
-    const projectionChartData = [];
-
-    // Parametri specifici per lo scenario
-    let monthlyRate = 0;
-    let annualRate = 0;
-
+    // ── Step 3: Tasso mensile di capitalizzazione ────────────────────────────
+    let annualRate;
     if (tfrDest === 'fondo') {
-      // Rendimento di mercato composto mensilmente
       annualRate = annualReturn / 100;
-      monthlyRate = annualRate / 12;
     } else {
-      // TFR in azienda: 1.5% fisso + 75% inflazione (0.02 * 0.75 = 0.015) => 3% annuo totale
-      annualRate = 0.015 + (0.75 * inflationRate);
-      monthlyRate = annualRate / 12; // Approssimiamo al mese per la simulazione
+      // Rivalutazione legale TFR in azienda: 1.5% fisso + 75% inflazione
+      annualRate = 0.015 + (0.75 * INFLATION_RATE); // ≈ 3% annuo
     }
+    const monthlyRate = annualRate / 12;
 
-    // Aggiungiamo il punto di partenza (Anno 0)
+    // ── Step 4: Proiezione anno per anno dalla data odierna ──────────────────
+    const yearsToRetirement = retirementAge - currentAge;
+    const projectionChartData = [];
+    let balance = realCurrentBalance;
+    let totalInvested = realCurrentBalance;
+
+    // Punto di partenza (Età attuale = "oggi")
     projectionChartData.push({
       age: currentAge,
-      nominalBalance: Math.round(nominalBalance),
-      realBalance: Math.round(nominalBalance),
-      invested: Math.round(totalInvested)
+      nominalBalance: Math.round(balance),
+      realBalance: Math.round(balance),
+      invested: Math.round(totalInvested),
     });
 
     for (let y = 1; y <= yearsToRetirement; y++) {
       for (let m = 0; m < 12; m++) {
-        nominalBalance = nominalBalance * (1 + monthlyRate) + totalMonthlyContribution;
+        balance = balance * (1 + monthlyRate) + totalMonthlyContribution;
         totalInvested += totalMonthlyContribution;
       }
-
-      // Attualizzazione: il potere d'acquisto reale si svaluta dell'inflazione (2%) ogni anno
-      const realBalance = nominalBalance / Math.pow(1 + inflationRate, y);
+      // Potere d'acquisto reale: svalutato dell'inflazione composta
+      const realBalance = balance / Math.pow(1 + INFLATION_RATE, y);
 
       projectionChartData.push({
         age: currentAge + y,
-        nominalBalance: Math.round(nominalBalance),
+        nominalBalance: Math.round(balance),
         realBalance: Math.round(realBalance),
-        invested: Math.round(totalInvested)
+        invested: Math.round(totalInvested),
       });
     }
 
-    // Calcolo Fiscale Finale
-    let applicableTaxRate = 0;
-
+    // ── Step 5: Calcolo Fiscale Finale ───────────────────────────────────────
+    let applicableTaxRate;
     if (tfrDest === 'fondo') {
-      // Regola agevolata Fondo Pensione
-      const yearsOfPermanence = yearsToRetirement; // Assumiamo iscrizione odierna
-      const extraYears = Math.max(0, yearsOfPermanence - 15);
-      const discount = extraYears * 0.003;
-      applicableTaxRate = Math.max(0.09, 0.15 - discount);
+      // Regola agevolata: 15% - 0.3% per ogni anno oltre i 15 (floor 9%)
+      const extraYears = Math.max(0, yearsToRetirement - 15);
+      applicableTaxRate = Math.max(0.09, 0.15 - extraYears * 0.003);
     } else {
-      // Regola standard TFR in azienda (Irpef media, assumiamo flat 23%)
-      applicableTaxRate = 0.23;
+      applicableTaxRate = 0.23; // IRPEF media flat su TFR in azienda
     }
 
-    // Il lordo è il balance nominale a fine periodo
-    const grossBalanceAtRetirement = nominalBalance;
-    
-    // Tasse sul capitale accumulato (escludendo i rendimenti già tassati anno per anno nei fondi o le dinamiche complesse,
-    // per semplificare applichiamo l'aliquota sul totale, sebbene nella realtà le tasse sui rendimenti dei FP siano al 20%).
-    // Modello semplificato richiesto: applichiamo l'aliquota finale sul montante per la parte soggetta.
-    // In questo modulo calcoliamo l'aliquota sul totale come indicato.
-    const totalTaxes = grossBalanceAtRetirement * applicableTaxRate;
-    const netBalanceAtRetirement = grossBalanceAtRetirement - totalTaxes;
-    
-    // Valore reale netto (potere d'acquisto effettivo)
-    const realPowerOfPurchase = netBalanceAtRetirement / Math.pow(1 + inflationRate, yearsToRetirement);
+    const grossBalanceAtRetirement = balance;
+    const netBalanceAtRetirement   = grossBalanceAtRetirement * (1 - applicableTaxRate);
+    const realPowerOfPurchase       = netBalanceAtRetirement / Math.pow(1 + INFLATION_RATE, yearsToRetirement);
 
     return {
       tfrDest,
+      gapMonths,
+      gapAccrued,
+      realCurrentBalance,
+      totalInvested,
       grossBalanceAtRetirement,
       applicableTaxRate,
       netBalanceAtRetirement,
       realPowerOfPurchase,
       projectionChartData,
-      totalInvested
     };
-  }, [pensionConfig, defaultIncome]);
+  }, [cfg, defaultIncome]);
 }

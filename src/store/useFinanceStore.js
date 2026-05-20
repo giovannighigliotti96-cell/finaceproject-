@@ -46,9 +46,10 @@ const emptyData = {
     authEmail: 'admin@finance.it',
     authPassword: 'admin',
     pensionConfig: {
-      tfrDestination: 'fondo', // 'fondo' o 'azienda'
-      currentTfr: 0,
-      monthlyContribution: 173,
+      tfrDestination: 'fondo',     // 'fondo' o 'azienda'
+      currentTfrBalance: 0,        // Saldo ufficiale estratto conto portale fondo
+      lastStatementDate: '2025-12',// Anno-Mese competenza del saldo (YYYY-MM)
+      monthlyAccrual: 175,         // Quota TFR mensile maturata in busta paga
       currentAge: 30,
       retirementAge: 67,
       annualReturn: 3.5,
