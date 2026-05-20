@@ -1,23 +1,25 @@
 import React, { useState, useRef } from 'react';
-import { useFinanceData } from '../context/FinanceContext';
+import { useShallow } from 'zustand/react/shallow';
+import { useOverviewMetrics } from '../hooks/computed/useOverviewMetrics';
 import { useFinanceStore } from '../store/useFinanceStore';
 import { exportStateAsJSON } from '../store/useFinanceStore';
 import { useToast } from '../components/Toast';
-import { Shield, PiggyBank, BarChart2, Download, Trash2, Save, Cloud, CloudUpload, CloudDownload, RefreshCw, Upload } from 'lucide-react';
+import { Shield, PiggyBank, BarChart2, Download, Trash2, Save, Cloud, CloudUpload, CloudDownload, RefreshCw, Upload, LogOut } from 'lucide-react';
+import { auth } from '../lib/firebase';
+import { signOut } from 'firebase/auth';
+import { useSyncStore } from '../hooks/useFirebaseSync';
 
 export default function Settings() {
-  const { data, computed } = useFinanceData();
-  // AUDIT REAL CODE: Settings exposes expectedReturnRate; assumedInflationRate and reconciliationTolerance
-  // were added to initial settings in the store for S02 and S05.
+  const computed = useOverviewMetrics();
+  const dataCategories = useFinanceStore(useShallow(state => state.data.categories || []));
+  const s = useFinanceStore(useShallow(state => state.data.settings || {}));
   const updateSettings  = useFinanceStore(state => state.updateSettings);
   const setData         = useFinanceStore(state => state.setData);
   const resetToDefaults = useFinanceStore(state => state.resetToDefaults);
-  const syncToCloud     = useFinanceStore(state => state.syncToCloud);
-  const restoreFromCloud= useFinanceStore(state => state.restoreFromCloud);
+  const resetToEmpty    = useFinanceStore(state => state.resetToEmpty);
   const showToast = useToast();
   const fileInputRef = useRef(null);
 
-  const s = data.settings;
 
   // Stato locale per editare senza commit immediato
   const [buffer, setBuffer]   = useState(s.safetyBuffer);
@@ -30,12 +32,11 @@ export default function Settings() {
   const [authPassword, setAuthPassword] = useState(s.authPassword || 'admin');
 
   // Cloud Sync
-  const [githubToken, setGithubToken] = useState(s.githubToken || '');
-  const [gistId, setGistId] = useState(s.gistId || '');
-  const [isSyncing, setIsSyncing] = useState(false);
+  const syncStatus = useSyncStore(state => state.syncStatus);
+  const user = auth.currentUser;
 
   // Budget per categoria
-  const variableCategories = data.categories.filter(c => c.group === 'variable');
+  const variableCategories = dataCategories.filter(c => c.group === 'variable');
   const [budgets, setBudgets] = useState({ ...(s.categoryBudgets || {}) });
 
   const handleSave = () => {
@@ -60,8 +61,6 @@ export default function Settings() {
       categoryBudgets:      sanitizedBudgets,
       budgetsLastUpdated:   new Date().toISOString(),
       expectedReturnRate:   parseFloat(returnRate),
-      githubToken:          githubToken.trim(),
-      gistId:               gistId.trim(),
       authEmail:            authEmail.trim(),
       authPassword:         authPassword,
     });
@@ -115,41 +114,10 @@ export default function Settings() {
     showToast('Database azzerato. Backup salvato automaticamente.', 'warning');
   };
 
-  const handlePush = async () => {
-    // Validazione token prima di tentare
-    const token = githubToken.trim();
-    if (!token) {
-      showToast('Inserisci il GitHub Token prima di fare il backup', 'error');
-      return;
-    }
-    
-    if (!token.startsWith('ghp_') && !token.startsWith('github_pat_')) {
-      showToast('Il token GitHub deve iniziare con "ghp_" o "github_pat_"', 'error');
-      return;
-    }
-
-    try {
-      setIsSyncing(true);
-      await syncToCloud();
-      showToast('Sincronizzazione completata con successo', 'success');
-    } catch (e) {
-      showToast(e.message, 'error');
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const handlePull = async () => {
-    if (!window.confirm("Attenzione: sovrascriverà i dati locali. Procedere?")) return;
-    try {
-      setIsSyncing(true);
-      await restoreFromCloud();
-      showToast('Ripristino cloud completato', 'success');
-    } catch (e) {
-      showToast(e.message, 'error');
-    } finally {
-      setIsSyncing(false);
-    }
+  const handleLogout = async () => {
+    if (!window.confirm("Vuoi disconnetterti? Dovrai fare nuovamente il login.")) return;
+    await signOut(auth);
+    resetToEmpty();
   };
 
   const inputStyle = {
@@ -316,89 +284,77 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* ── CLOUD SYNC (Nascosto per utenti con login su Vercel) ─────────────── */}
-      {sessionStorage.getItem('isAuthenticated') !== 'true' && (
-        <div className="card">
-          <h3 className="flex items-center gap-2 mb-3">
-            <Cloud size={16} /> Cloud Sync (GitHub Gists) - Backup Automatico
-          </h3>
-          <div style={{ background: 'var(--bg-tertiary)', padding: '0.75rem', borderRadius: 'var(--radius-md)', marginBottom: '1rem', fontSize: '0.85rem' }}>
-            <strong>✨ Backup Automatico Attivo</strong>
-            <p style={{ marginTop: '0.25rem', color: 'var(--text-muted)' }}>
-              I tuoi dati vengono salvati automaticamente su GitHub ogni 24 ore quando apri l'app. 
-              <strong> Serve solo il Token</strong> - il Gist viene creato automaticamente al primo backup!
-            </p>
-          </div>
-          
-          {/* Istruzioni dettagliate */}
-          <div style={{ background: 'var(--status-yellow-bg)', padding: '0.75rem', borderRadius: 'var(--radius-md)', marginBottom: '1rem', fontSize: '0.85rem', border: '1px solid var(--status-yellow)' }}>
-            <strong style={{ color: 'var(--status-yellow)' }}>📝 Come creare il token (2 minuti):</strong>
-            <ol style={{ marginTop: '0.5rem', marginLeft: '1.25rem', color: 'var(--text-muted)', lineHeight: '1.6' }}>
-              <li>Vai su <a href="https://github.com/settings/tokens/new?scopes=gist&description=CFO%20Backup" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--chart-primary)', textDecoration: 'underline' }}>questa pagina</a></li>
-              <li>Seleziona <strong>solo</strong> il permesso "gist" ✅</li>
-              <li>Clicca "Generate token" in fondo</li>
-              <li>Copia il token (inizia con <code>ghp_</code>)</li>
-              <li>Incollalo qui sotto e clicca "Salva Impostazioni"</li>
-            </ol>
-          </div>
-          
-          <div className="grid-2col mb-4">
-            <div>
-              <label className="kpi-label mb-2">GitHub Token (obbligatorio)</label>
-              <input 
-                type="password" 
-                value={githubToken} 
-                onChange={e => setGithubToken(e.target.value.trim())} 
-                style={inputStyle} 
-                placeholder="ghp_..." 
+      {/* ── FIREBASE CLOUD SYNC ─────────────── */}
+      <div className="card">
+        <h3 className="flex items-center gap-2 mb-3">
+          <Cloud size={16} /> Sincronizzazione Cloud
+        </h3>
+        <div style={{ background: 'var(--bg-tertiary)', padding: '0.75rem', borderRadius: 'var(--radius-md)', marginBottom: '1rem', fontSize: '0.85rem' }}>
+          <strong>✨ Cloud Sync Attivo</strong>
+          <p style={{ marginTop: '0.25rem', color: 'var(--text-muted)' }}>
+            I tuoi dati vengono salvati in tempo reale sul cloud. Tutte le modifiche vengono propagate istantaneamente su tutti i tuoi dispositivi collegati a questo account.
+          </p>
+        </div>
+        
+        <div className="grid-2col mb-4">
+          <div>
+            <label className="kpi-label mb-2">Stato Sincronizzazione</label>
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '0.5rem', 
+              padding: '0.625rem 0.75rem',
+              background: 'var(--bg-primary)',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--border-color)',
+            }}>
+              <Cloud 
+                size={16} 
+                style={{
+                  color: syncStatus === 'synced' ? 'var(--status-green)' : 
+                         syncStatus === 'syncing' ? 'var(--status-yellow)' : 
+                         syncStatus === 'error' ? 'var(--status-red)' : 'var(--text-muted)'
+                }} 
               />
-              <p className="kpi-sub mt-1">
-                Il token deve iniziare con <code>ghp_</code> o <code>github_pat_</code>
-              </p>
-            </div>
-            <div>
-              <label className="kpi-label mb-2">Gist ID (opzionale - auto-generato)</label>
-              <input 
-                type="text" 
-                value={gistId} 
-                onChange={e => setGistId(e.target.value.trim())} 
-                style={inputStyle} 
-                placeholder="Lascia vuoto per crearlo automaticamente" 
-                disabled
-              />
-              <p className="kpi-sub mt-1">
-                Viene creato automaticamente al primo backup. Non modificare.
-              </p>
+              <strong style={{ textTransform: 'capitalize' }}>
+                {syncStatus === 'synced' ? 'Sincronizzato' : 
+                 syncStatus === 'syncing' ? 'Sincronizzazione in corso...' : 
+                 syncStatus === 'error' ? 'Errore Sincronizzazione' : 'Offline'}
+              </strong>
             </div>
           </div>
-          {s.lastSync && (
-            <div className="kpi-sub mb-4" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ color: 'var(--status-green)', fontSize: '1.2rem' }}>✓</span>
-              <span>
-                Ultimo backup: <strong>{new Date(s.lastSync).toLocaleString('it-IT')}</strong>
-                {(() => {
-                  const hoursSince = (Date.now() - new Date(s.lastSync).getTime()) / (1000 * 60 * 60);
-                  if (hoursSince < 24) {
-                    return <span style={{ color: 'var(--status-green)', marginLeft: '0.5rem' }}>({Math.floor(hoursSince)}h fa)</span>;
-                  } else {
-                    return <span style={{ color: 'var(--status-yellow)', marginLeft: '0.5rem' }}>({Math.floor(hoursSince / 24)}gg fa)</span>;
-                  }
-                })()}
-              </span>
+          <div>
+            <label className="kpi-label mb-2">Account Attivo</label>
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              padding: '0.625rem 0.75rem',
+              background: 'var(--bg-primary)',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--border-color)',
+              color: 'var(--text-primary)',
+              fontWeight: 600
+            }}>
+              {user ? user.email : 'Nessun utente'}
             </div>
-          )}
-          <div style={{ display: 'flex', gap: '1rem' }}>
-            <button onClick={handlePull} disabled={isSyncing} className="btn btn-ghost flex items-center gap-2">
-              {isSyncing ? <RefreshCw size={15} className="animate-spin" /> : <CloudDownload size={15} />}
-              Ripristina da Cloud
-            </button>
-            <button onClick={handlePush} disabled={isSyncing} className="btn btn-ghost flex items-center gap-2">
-              {isSyncing ? <RefreshCw size={15} className="animate-spin" /> : <CloudUpload size={15} />}
-              Backup Manuale Ora
-            </button>
           </div>
         </div>
-      )}
+
+        {s.lastCloudSync && (
+          <div className="kpi-sub mb-4" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span style={{ color: 'var(--status-green)', fontSize: '1.2rem' }}>✓</span>
+            <span>
+              Ultimo backup: <strong>{new Date(s.lastCloudSync).toLocaleString('it-IT')}</strong>
+            </span>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <button onClick={handleLogout} className="btn btn-ghost flex items-center gap-2" style={{ color: 'var(--status-red)' }}>
+            <LogOut size={15} /> Disconnettiti dal Cloud
+          </button>
+        </div>
+      </div>
 
       {/* ── AZIONI ───────────────────────────────────────────────────────── */}
       <div className="grid-2col">

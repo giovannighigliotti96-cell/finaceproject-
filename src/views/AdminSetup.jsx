@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { useFinanceData } from '../context/FinanceContext';
+import { useShallow } from 'zustand/react/shallow';
+import { useOverviewMetrics } from '../hooks/computed/useOverviewMetrics';
 import { useFinanceStore } from '../store/useFinanceStore';
 import { PlusCircle, Calendar, Wallet, Landmark, ShieldCheck, ArrowRight } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function AdminSetup() {
-  const { data, computed } = useFinanceData();
+  const data = useFinanceStore(useShallow(state => state.data || {}));
+  const computed = useOverviewMetrics();
   const registerSalaryAndStartCycle = useFinanceStore(state => state.registerSalaryAndStartCycle);
   const markFixedCostAsPaid = useFinanceStore(state => state.markFixedCostAsPaid);
 

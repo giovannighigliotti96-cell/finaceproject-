@@ -1,5 +1,6 @@
 import React from 'react';
-import { useFinanceData } from '../context/FinanceContext';
+import { useShallow } from 'zustand/react/shallow';
+import { useOverviewMetrics } from '../hooks/computed/useOverviewMetrics';
 import { useFinanceStore } from '../store/useFinanceStore';
 import { CheckCircle2, ShieldCheck, Zap, TrendingDown, Calendar } from 'lucide-react';
 import EmptyState from '../components/EmptyState';
@@ -8,8 +9,9 @@ import { format, parseISO } from 'date-fns';
 import { it } from 'date-fns/locale';
 
 export default function Overview({ onNavigate }) {
-  const { data, computed } = useFinanceData();
   const markFixedCostAsPaid = useFinanceStore(state => state.markFixedCostAsPaid);
+  const dataSettings = useFinanceStore(useShallow(state => state.data.settings || {}));
+  const computed = useOverviewMetrics();
   const formatEuro = (val) => new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(val);
 
   if (!computed.activePeriod) return <EmptyState onGoToAdmin={() => onNavigate?.('admin')} />;
@@ -225,7 +227,7 @@ export default function Overview({ onNavigate }) {
               { label: 'Stipendio ciclo',    value: computed.incomeActual ?? 0,                                                               sign: '+', color: 'var(--text-primary)'  },
               { label: 'Fissi totali',        value: (computed.fixedExpensesActual ?? 0) + (computed.usciteFissePianificateResidue ?? 0),      sign: '−', color: 'var(--status-red)'    },
               { label: 'Variabili pagate',    value: computed.variableExpensesActual ?? 0,                                                     sign: '−', color: 'var(--status-yellow)' },
-              { label: 'Buffer riservato',    value: data.settings.safetyBuffer ?? 0,                                                         sign: '−', color: 'var(--status-yellow)' },
+              { label: 'Buffer riservato',    value: dataSettings.safetyBuffer ?? 0,                                                         sign: '−', color: 'var(--status-yellow)' },
             ].map((r, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem' }}>
                 <span style={{ color: 'var(--text-muted)' }}>{r.label}</span>

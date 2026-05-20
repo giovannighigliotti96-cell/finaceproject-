@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { useFinanceData } from '../context/FinanceContext';
+import { useShallow } from 'zustand/react/shallow';
+import { useOverviewMetrics } from '../hooks/computed/useOverviewMetrics';
 import { useFinanceStore } from '../store/useFinanceStore';
 import { useToast } from '../components/Toast';
 import { Target, Plus, Trash2, Edit3, Check, X } from 'lucide-react';
@@ -9,7 +10,10 @@ import { differenceInDays, addMonths, format } from 'date-fns';
 import { it } from 'date-fns/locale';
 
 export default function Goals({ onNavigate }) {
-  const { data, computed } = useFinanceData();
+  const computed = useOverviewMetrics();
+  const goals = useFinanceStore(useShallow(state => state.data.goals || []));
+  const accounts = useFinanceStore(useShallow(state => state.data.accounts || []));
+  const settings = useFinanceStore(useShallow(state => state.data.settings || {}));
   // AUDIT REAL CODE: Goals view reads `computed.goalFundingRate` (if present) and uses store.goals.
   // UI earmarking not added here yet; store provides assignGoalToAccount/unassignGoalFromAccount.
   const addGoal = useFinanceStore(state => state.addGoal);
@@ -64,8 +68,6 @@ export default function Goals({ onNavigate }) {
     showToast('Obiettivo eliminato', 'warning');
   };
 
-  const goals = data.goals || [];
-  const accounts = data.accounts || [];
   // G-13: se il goal ha earmarkedAccountId, mostra il saldo reale del conto come currentAmount
 const goalsWithLiveBalance = goals.map(goal => {
   if (!goal.earmarkedAccountId) return goal;
@@ -90,7 +92,7 @@ const goalsWithLiveBalance = goals.map(goal => {
   };
 
   const targetMensileNecessario = calculateRequiredMonthly(goalsWithLiveBalance);
-  const targetPianificato = data.settings?.targetSavingsAmount || 0;
+  const targetPianificato = settings?.targetSavingsAmount || 0;
   const isTargetSafe = targetPianificato >= targetMensileNecessario;
 
   // G4: helper per calcolare velocity per singolo goal

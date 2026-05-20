@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "date-fns": "^4.1.0",
+    "firebase": "^12.13.0",
     "idb-keyval": "^6.2.2",
     "lucide-react": "^1.14.0",
     "react": "^19.2.5",

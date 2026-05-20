@@ -40,18 +40,18 @@ const emptyData = {
     },
     targetSavingsAmount: 190,
     budgetsLastUpdated: null,
-    githubToken: '',
-    gistId: '',
-    lastSync: null,
+    lastCloudSync: null,
+    syncStatus: 'offline',
+    firebaseUid: null,
     authEmail: 'admin@finance.it',
     authPassword: 'admin',
   },
   categorizationRules: [
-    { pattern: '(?i)(esselunga|coop|pam|carrefour|conad|lidl|aldi|crai)', categoryId: 'alimentari' },
-    { pattern: '(?i)(ristorante|pizzeria|bar|gelateria|mcdonald|kfc|sushi|trattoria|pub)', categoryId: 'ristorazione' },
-    { pattern: '(?i)(amazon|paypal|satispay|tabacchi|farmacia)', categoryId: 'varie' },
-    { pattern: '(?i)(netflix|spotify|prime|disney|dazn)', categoryId: 'intrattenimento' },
-    { pattern: '(?i)(trenitalia|italo|eni|q8|tamoil|telepass|atm|taxi|uber)', categoryId: 'trasporti' }
+    { pattern: 'esselunga|coop|pam|carrefour|conad|lidl|aldi|crai', categoryId: 'alimentari' },
+    { pattern: 'ristorante|pizzeria|bar|gelateria|mcdonald|kfc|sushi|trattoria|pub', categoryId: 'ristorazione' },
+    { pattern: 'amazon|paypal|satispay|tabacchi|farmacia', categoryId: 'varie' },
+    { pattern: 'netflix|spotify|prime|disney|dazn', categoryId: 'intrattenimento' },
+    { pattern: 'trenitalia|italo|eni|q8|tamoil|telepass|atm|taxi|uber', categoryId: 'trasporti' }
   ],
   periods: [],
   accounts: [],
@@ -177,6 +177,20 @@ function applyInvestmentTransfer(accounts, tx, direction = 'apply') {
     }
     return acc;
   });
+}
+
+// ─── UTILITY: PULISCI PATTERN REGEX SPORCHI ──────────────────────────────────
+// Rimuove la sintassi Python (?i) dai pattern vecchi memorizzati nel browser
+function sanitizeCategorizationRules(rules) {
+  if (!Array.isArray(rules)) return [];
+  return rules.map(rule => {
+    let pattern = String(rule.pattern);
+    // Rimuovi il prefisso (?i) che è sintassi Python/PCRE non valida in JavaScript
+    pattern = pattern.replace(/^\(\?i\)/, '');
+    // Se rimane una sola coppia di parentesi esterne, rimuovile (e.g. "(esselunga|coop)" → "esselunga|coop")
+    pattern = pattern.replace(/^\((.+)\)$/, '$1');
+    return { ...rule, pattern };
+  }).filter(r => r.pattern && r.pattern.length > 0);
 }
 
 // ─── UTILITY: EXPORT JSON (safety net prima del reset) ──────────────────────
@@ -823,134 +837,7 @@ export const useFinanceStore = create(
         }));
       },
 
-      syncToCloud: async () => {
-        const data = get().data;
-        let { githubToken, gistId } = data.settings;
-        if (!githubToken) throw new Error("Configura il Github Token nelle impostazioni.");
-        
-        // Pulisci il gistId da spazi e punti finali
-        gistId = gistId?.trim().replace(/\.$/, '');
-        
-        console.log('[syncToCloud] Tentativo di backup su GitHub Gist...');
-        console.log('[syncToCloud] Gist ID:', gistId || 'Non configurato - verrà creato automaticamente');
-        console.log('[syncToCloud] Token presente:', githubToken ? 'Sì' : 'No');
-        
-        try {
-          // Se non c'è gistId, crea un nuovo Gist
-          if (!gistId) {
-            console.log('[syncToCloud] Creazione nuovo Gist...');
-            const createResponse = await fetch('https://api.github.com/gists', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${githubToken}`,
-                'Accept': 'application/vnd.github.v3+json',
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                description: 'CFO Personale - Backup Automatico',
-                public: false,
-                files: {
-                  "cfo-backup.json": {
-                    content: JSON.stringify(data, null, 2)
-                  }
-                }
-              })
-            });
-            
-            if (!createResponse.ok) {
-              const errorText = await createResponse.text();
-              console.error('[syncToCloud] Errore creazione Gist:', errorText);
-              throw new Error(`Impossibile creare il Gist. Verifica che il token sia valido e abbia il permesso 'gist'.`);
-            }
-            
-            const newGist = await createResponse.json();
-            gistId = newGist.id;
-            
-            console.log('[syncToCloud] ✓ Nuovo Gist creato:', gistId);
-            
-            // Salva il nuovo gistId nelle impostazioni
-            set(state => ({
-              data: {
-                ...state.data,
-                settings: {
-                  ...state.data.settings,
-                  gistId: gistId,
-                  lastSync: new Date().toISOString()
-                }
-              }
-            }));
-            
-            return;
-          }
-          
-          // Aggiorna il Gist esistente
-          const response = await fetch(`https://api.github.com/gists/${gistId}`, {
-            method: 'PATCH',
-            headers: {
-              'Authorization': `Bearer ${githubToken}`,
-              'Accept': 'application/vnd.github.v3+json',
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ 
-              files: { 
-                "cfo-backup.json": { 
-                  content: JSON.stringify(data, null, 2) 
-                } 
-              } 
-            })
-          });
-          
-          console.log('[syncToCloud] Response status:', response.status);
-          
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.error('[syncToCloud] Errore GitHub API:', errorText);
-            
-            // Se il Gist non esiste (404), prova a crearne uno nuovo
-            if (response.status === 404) {
-              console.log('[syncToCloud] Gist non trovato, creazione nuovo Gist...');
-              
-              // Resetta gistId e riprova
-              set(state => ({
-                data: {
-                  ...state.data,
-                  settings: {
-                    ...state.data.settings,
-                    gistId: ''
-                  }
-                }
-              }));
-              
-              // Richiama ricorsivamente per creare il nuovo Gist
-              return await get().syncToCloud();
-            }
-            
-            // Altri errori
-            if (response.status === 401) {
-              throw new Error("Token non valido. Verifica che il token sia corretto e abbia il permesso 'gist'.");
-            } else if (response.status === 403) {
-              throw new Error("Accesso negato. Il token potrebbe essere scaduto o non avere i permessi necessari.");
-            } else {
-              throw new Error(`Errore GitHub API (${response.status}): ${errorText}`);
-            }
-          }
-          
-          set(state => ({ 
-            data: { 
-              ...state.data, 
-              settings: { 
-                ...state.data.settings, 
-                lastSync: new Date().toISOString() 
-              } 
-            } 
-          }));
-          
-          console.log('[syncToCloud] ✓ Backup completato con successo');
-        } catch (error) {
-          console.error('[syncToCloud] Errore durante il backup:', error);
-          throw error;
-        }
-      },
+
 
       // ── BANK IMPORT LOGIC ──
       learnCategorizationRule: (keyword, categoryId) => {
@@ -964,7 +851,7 @@ export const useFinanceStore = create(
               ...state.data,
               categorizationRules: [
                 ...rules,
-                { pattern: `(?i)(${keyword})`, categoryId }
+                  { pattern: keyword, categoryId }
               ]
             }
           };
@@ -975,14 +862,14 @@ export const useFinanceStore = create(
         set((state) => {
           const currentTx = state.data.transactions || [];
           const existingHashes = new Set(
-            currentTx.map(t => `${t.date}_${t.amount}_${t.description.toLowerCase().trim()}`)
+            currentTx.map(t => `${t.date}_${t.amount}_${(t.description || '').toLowerCase().trim()}`)
           );
 
           let importedCount = 0;
           const newTx = [];
 
           transactionsToImport.forEach(incoming => {
-            const hash = `${incoming.date}_${incoming.amount}_${incoming.description.toLowerCase().trim()}`;
+            const hash = `${incoming.date}_${incoming.amount}_${(incoming.description || '').toLowerCase().trim()}`;
             if (!existingHashes.has(hash)) {
               newTx.push({
                 id: `tx_imported_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
@@ -996,62 +883,38 @@ export const useFinanceStore = create(
 
           if (newTx.length === 0) return state;
 
+          let updatedAccounts = state.data.accounts;
+          newTx.forEach(tx => {
+            updatedAccounts = updatedAccounts.map(acc => {
+              if (acc.id !== tx.accountId || tx.status !== 'paid') return acc;
+              const delta = (tx.type === 'expense') ? -tx.amount : tx.amount;
+              return { ...acc, currentBalance: acc.currentBalance + delta };
+            });
+            if (tx.type === 'investment') {
+              updatedAccounts = applyInvestmentTransfer(updatedAccounts, tx, 'apply');
+            }
+          });
+
           return {
             data: {
               ...state.data,
-              transactions: [...currentTx, ...newTx]
+              transactions: [...currentTx, ...newTx],
+              accounts: updatedAccounts
             }
           };
         });
       },
 
-      restoreFromCloud: async () => {
-        const { githubToken, gistId } = get().data.settings;
-        if (!githubToken || !gistId) throw new Error("Configura Github Token e Gist ID nelle impostazioni.");
-        
-        console.log('[restoreFromCloud] Tentativo di ripristino da GitHub Gist...');
-        
-        try {
-          const response = await fetch(`https://api.github.com/gists/${gistId}`, {
-            headers: { 
-              'Authorization': `Bearer ${githubToken}`, 
-              'Accept': 'application/vnd.github.v3+json' 
-            }
-          });
-          
-          console.log('[restoreFromCloud] Response status:', response.status);
-          
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.error('[restoreFromCloud] Errore GitHub API:', errorText);
-            
-            if (response.status === 401) {
-              throw new Error("Token non valido. Verifica le credenziali.");
-            } else if (response.status === 404) {
-              throw new Error("Gist non trovato. Verifica l'ID.");
-            } else {
-              throw new Error(`Errore GitHub API (${response.status}): ${errorText}`);
-            }
-          }
-          
-          const result = await response.json();
-          const fileContent = result.files["cfo-backup.json"]?.content;
-          
-          if (!fileContent || fileContent === "{}") {
-            throw new Error("Nessun dato valido trovato nel Gist. Fai prima un backup.");
-          }
-          
-          set({ data: JSON.parse(fileContent) });
-          console.log('[restoreFromCloud] ✓ Ripristino completato con successo');
-        } catch (error) {
-          console.error('[restoreFromCloud] Errore durante il ripristino:', error);
-          throw error;
-        }
-      },
+
     }),
     {
       name: import.meta.env.VITE_IS_DEMO === 'true' ? 'private-cfo-demo' : 'private-cfo-clean',
       storage: createJSONStorage(() => import.meta.env.VITE_IS_DEMO === 'true' ? sessionStorage : idbStorage),
+      onRehydrateStorage: () => (state, error) => {
+        if (state && state.data && state.data.categorizationRules) {
+          state.data.categorizationRules = sanitizeCategorizationRules(state.data.categorizationRules);
+        }
+      },
     }
   )
 );

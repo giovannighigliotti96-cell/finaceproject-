@@ -1,10 +1,13 @@
 import React from 'react';
-import { useFinanceData } from '../context/FinanceContext';
+import { useShallow } from 'zustand/react/shallow';
+import { useOverviewMetrics } from '../hooks/computed/useOverviewMetrics';
+import { useFinanceStore } from '../store/useFinanceStore';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import EmptyState from '../components/EmptyState';
 
 export default function BudgetActual({ onNavigate }) {
-  const { data, computed } = useFinanceData();
+  const data = useFinanceStore(useShallow(state => state.data || {}));
+  const computed = useOverviewMetrics();
   const formatEuro = (val) => new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(val);
 
   if (!computed.activePeriod) return <EmptyState onGoToAdmin={() => onNavigate?.('admin')} />;

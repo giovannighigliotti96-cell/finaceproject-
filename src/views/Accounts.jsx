@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { useFinanceData } from '../context/FinanceContext';
+import { useShallow } from 'zustand/react/shallow';
+import { useOverviewMetrics } from '../hooks/computed/useOverviewMetrics';
 import { useFinanceStore } from '../store/useFinanceStore';
 import { Landmark, Shield, TrendingUp, Wallet, Plus, Trash2, Edit3, X, Check, Building } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
@@ -34,7 +35,8 @@ const COLORS = {
 };
 
 export default function Accounts({ onNavigate }) {
-  const { data, computed } = useFinanceData();
+  const data = useFinanceStore(useShallow(state => state.data || {}));
+  const computed = useOverviewMetrics();
   const addAccount = useFinanceStore(state => state.addAccount);
   const updateAccount = useFinanceStore(state => state.updateAccount);
   const deleteAccount = useFinanceStore(state => state.deleteAccount);

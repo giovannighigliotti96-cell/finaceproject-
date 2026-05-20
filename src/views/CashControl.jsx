@@ -1,19 +1,22 @@
 import React, { useMemo } from 'react';
-import { useFinanceData } from '../context/FinanceContext';
+import { useShallow } from 'zustand/react/shallow';
+import { useCashFlowMetrics } from '../hooks/computed/useCashFlowMetrics';
+import { useFinanceStore } from '../store/useFinanceStore';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { AlertTriangle, TrendingDown } from 'lucide-react';
 import EmptyState from '../components/EmptyState';
 import KpiInfo from '../components/KpiInfo';
 
 export default function CashControl({ onNavigate }) {
-  const { data, computed } = useFinanceData();
+  const computed = useCashFlowMetrics();
+  const dataSettings = useFinanceStore(useShallow(state => state.data.settings || {}));
   const formatEuro = (val) => new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(val);
 
   if (!computed.activePeriod) return <EmptyState onGoToAdmin={() => onNavigate?.('admin')} />;
 
   // FIX 1.2 + 1.6 + F06: dati ora provengono dal context
   const { bridgeData, stressDays, daysToSalary, finalBridgeBalance, giorniCritici } = computed;
-  const isSafe = finalBridgeBalance >= data.settings.safetyBuffer;
+  const isSafe = finalBridgeBalance >= (dataSettings.safetyBuffer || 0);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
@@ -64,10 +67,10 @@ export default function CashControl({ onNavigate }) {
               formatter={v => [formatEuro(v), 'Saldo Previsto']}
             />
             <ReferenceLine
-              y={data.settings.safetyBuffer}
+              y={dataSettings.safetyBuffer || 0}
               stroke="var(--status-yellow)"
               strokeDasharray="5 5"
-              label={{ value: `Buffer ${formatEuro(data.settings.safetyBuffer)}`, position: 'insideTopRight', fontSize: 10, fill: 'var(--status-yellow)' }}
+              label={{ value: `Buffer ${formatEuro(dataSettings.safetyBuffer || 0)}`, position: 'insideTopRight', fontSize: 10, fill: 'var(--status-yellow)' }}
             />
             <Area
               type="monotone"
@@ -124,7 +127,7 @@ export default function CashControl({ onNavigate }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {[
               { label: 'Giorni alla paga', value: `${computed.giorniMancantiAlProssimoAccredito} gg`, color: 'var(--text-primary)', info: 'Quanti giorni mancano al prossimo accredito dello stipendio (data fine ciclo).' },
-              { label: 'Giorni critici (< Buffer)', value: `${giorniCritici} gg`, color: giorniCritici > 0 ? 'var(--status-red)' : 'var(--status-green)', info: `Giorni simulati in cui il saldo scenderebbe sotto il buffer di sicurezza (${formatEuro(data.settings.safetyBuffer)}). Zero è ottimale.` },
+              { label: 'Giorni critici (< Buffer)', value: `${giorniCritici} gg`, color: giorniCritici > 0 ? 'var(--status-red)' : 'var(--status-green)', info: `Giorni simulati in cui il saldo scenderebbe sotto il buffer di sicurezza (${formatEuro(dataSettings.safetyBuffer || 0)}). Zero è ottimale.` },
               { label: 'Burn variabile/gg (media)', value: formatEuro(computed.spesaMediaGiornalieraVariabileAttuale), color: 'var(--status-yellow)', info: 'Media giornaliera delle spese variabili già pagate in questo ciclo. Usata per proiettare il saldo futuro.' },
               { label: 'Impegni fissi residui', value: formatEuro(computed.usciteFissePianificateResidue), color: 'var(--status-red)', info: 'Totale delle spese fisse ancora da pagare in questo ciclo (pianificate ma non ancora confermate).' },
               { label: 'Saldo finale stimato', value: formatEuro(finalBridgeBalance), color: isSafe ? 'var(--status-green)' : 'var(--status-red)', info: 'Saldo del conto corrente stimato al giorno del prossimo stipendio, dopo burn variabile e addebiti fissi.' },

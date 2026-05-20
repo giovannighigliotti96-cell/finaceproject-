@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { useFinanceData } from '../context/FinanceContext';
+import { useShallow } from 'zustand/react/shallow';
+import { useOverviewMetrics } from '../hooks/computed/useOverviewMetrics';
 import { useFinanceStore } from '../store/useFinanceStore';
 import { Lock, ShieldAlert, CheckCircle, AlertTriangle, Wallet, ArrowRight } from 'lucide-react';
 import { format, parseISO, addMonths } from 'date-fns';
@@ -7,7 +8,8 @@ import { it } from 'date-fns/locale';
 import EmptyState from '../components/EmptyState';
 
 export default function PeriodClose({ onNavigate }) {
-  const { data, computed } = useFinanceData();
+  const data = useFinanceStore(useShallow(state => state.data || {}));
+  const computed = useOverviewMetrics();
   // FIX 1.1: usa la nuova azione closePeriodAndOpenNext che genera i fissi
   const closePeriodAndOpenNext = useFinanceStore(state => state.closePeriodAndOpenNext);
 

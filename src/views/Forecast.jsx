@@ -1,11 +1,14 @@
 import React from 'react';
-import { useFinanceData } from '../context/FinanceContext';
+import { useShallow } from 'zustand/react/shallow';
+import { useOverviewMetrics } from '../hooks/computed/useOverviewMetrics';
+import { useFinanceStore } from '../store/useFinanceStore';
 import { Target, AlertTriangle, Clock } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from 'recharts';
 import EmptyState from '../components/EmptyState';
 
 export default function Forecast({ onNavigate }) {
-  const { data, computed } = useFinanceData();
+  const data = useFinanceStore(useShallow(state => state.data || {}));
+  const computed = useOverviewMetrics();
   const formatEuro = (val) => new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(val);
 
   if (!computed.activePeriod) return <EmptyState onGoToAdmin={() => onNavigate?.('admin')} />;

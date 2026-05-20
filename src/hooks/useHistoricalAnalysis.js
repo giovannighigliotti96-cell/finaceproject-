@@ -1,19 +1,24 @@
 import { useMemo } from 'react';
 import { format, parse, differenceInMonths } from 'date-fns';
 import { it } from 'date-fns/locale';
+import { useShallow } from 'zustand/react/shallow';
+import { useFinanceStore } from '../store/useFinanceStore';
 
 /**
  * Hook per analisi storica multi-periodo
  * Supporta: mese, trimestre, semestre, anno
  * Zero impatto su codice esistente (hook isolato)
  */
-export function useHistoricalAnalysis(data, viewType = 'month', selectedPeriodId = null) {
+export function useHistoricalAnalysis(viewType = 'month', selectedPeriodId = null) {
+  const periods = useFinanceStore(useShallow(state => state.data.periods || []));
+  const transactions = useFinanceStore(useShallow(state => state.data.transactions || []));
+  const categories = useFinanceStore(useShallow(state => state.data.categories || []));
+  const settings = useFinanceStore(useShallow(state => state.data.settings || {}));
+
   return useMemo(() => {
-    if (!data || !data.periods || !data.transactions) {
+    if (!periods || !transactions) {
       return { isDataSufficient: false, availablePeriods: [], periodData: null };
     }
-
-    const { periods, transactions, categories, settings } = data;
 
     // Solo periodi chiusi, ordinati cronologicamente
     const closedPeriods = periods
@@ -275,5 +280,5 @@ export function useHistoricalAnalysis(data, viewType = 'month', selectedPeriodId
       trendData,
       insights,
     };
-  }, [data, viewType, selectedPeriodId]);
+  }, [periods, transactions, categories, settings, viewType, selectedPeriodId]);
 }

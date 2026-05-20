@@ -17,10 +17,13 @@ import {
   X,
   BarChart3,
   FileUp,
+  Cloud,
 } from 'lucide-react';
+import { useSyncStore } from '../hooks/useFirebaseSync';
 import ErrorBoundary from './ErrorBoundary';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { useFinanceData } from '../context/FinanceContext';
+import { useShallow } from 'zustand/react/shallow';
+import { useOverviewMetrics } from '../hooks/computed/useOverviewMetrics';
 import { useFinanceStore } from '../store/useFinanceStore';
 import { format, parseISO } from 'date-fns';
 import { it } from 'date-fns/locale';
@@ -47,20 +50,13 @@ export default function Layout() {
   const location = useLocation();
   const activeView = location.pathname.replace('/', '') || 'overview';
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { computed, data } = useFinanceData();
+  const computed = useOverviewMetrics();
+  const data = useFinanceStore(useShallow(state => state.data || {}));
   const updateSettings = useFinanceStore(state => state.updateSettings);
   const resetToEmpty = useFinanceStore(state => state.resetToEmpty);
   const resetToDemo = useFinanceStore(state => state.resetToDemo);
+  const syncStatus = useSyncStore(state => state.syncStatus);
   const theme = data?.settings?.theme || 'dark';
-
-  const isVercel = !import.meta.env.DEV;
-  const [showLogin, setShowLogin] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(
-    sessionStorage.getItem('isAuthenticated') === 'true'
-  );
-
-  const correctEmail = data?.settings?.authEmail || 'admin@finance.it';
-  const correctPassword = data?.settings?.authPassword || 'admin';
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -77,32 +73,6 @@ export default function Layout() {
 
   return (
     <div className="app-container">
-      {/* Vercel Login Overlay */}
-      {showLogin && isVercel && !isAuthenticated && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 1000, 
-          background: 'var(--bg-primary)', overflowY: 'auto'
-        }}>
-          <div style={{ position: 'absolute', top: '1rem', right: '1rem' }}>
-            <button 
-              onClick={() => setShowLogin(false)}
-              style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', padding: '0.5rem' }}
-            >
-              <X size={24} />
-            </button>
-          </div>
-          <Login 
-            correctEmail={correctEmail}
-            correctPassword={correctPassword}
-            onLogin={() => {
-              sessionStorage.setItem('isAuthenticated', 'true');
-              setIsAuthenticated(true);
-              setShowLogin(false);
-              resetToEmpty();
-            }}
-          />
-        </div>
-      )}
 
       {/* FIX 3.12: overlay mobile per chiudere sidebar */}
       {sidebarOpen && (
@@ -218,31 +188,17 @@ export default function Layout() {
               {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
             </button>
 
-            {/* Login Button (solo Vercel) */}
-            {isVercel && (
-              <div style={{ display: 'flex', alignItems: 'center' }}>
-                {!isAuthenticated ? (
-                  <button
-                    onClick={() => setShowLogin(true)}
-                    className="btn btn-primary"
-                    style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }}
-                  >
-                    Login
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => {
-                      sessionStorage.removeItem('isAuthenticated');
-                      setIsAuthenticated(false);
-                      resetToDemo();
-                    }}
-                    style={{ background: 'transparent', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '0.4rem 1rem', cursor: 'pointer', color: 'var(--text-primary)', fontSize: '0.85rem' }}
-                  >
-                    Logout
-                  </button>
-                )}
-              </div>
-            )}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginRight: '0.5rem' }}>
+              <Cloud 
+                size={18} 
+                style={{
+                  color: syncStatus === 'synced' ? 'var(--status-green)' : 
+                         syncStatus === 'syncing' ? 'var(--status-yellow)' : 
+                         syncStatus === 'error' ? 'var(--status-red)' : 'var(--text-muted)'
+                }} 
+              />
+            </div>
 
             <button
               onClick={toggleTheme}

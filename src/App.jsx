@@ -1,9 +1,9 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { createHashRouter, RouterProvider, Navigate } from 'react-router-dom';
-import { FinanceProvider } from './context/FinanceContext';
 import { ToastProvider } from './components/Toast';
 import ErrorBoundary from './components/ErrorBoundary';
 import Layout from './components/Layout';
+import AuthGuard from './components/AuthGuard';
 import { useFinanceStore } from './store/useFinanceStore';
 import { useAutoBackup } from './hooks/useAutoBackup';
 
@@ -32,6 +32,8 @@ if (import.meta.env.DEV) {
   });
 }
 
+import { useFirebaseSync } from './hooks/useFirebaseSync';
+
 // FIX 3.5: Hydration guard — skeleton durante init async di IndexedDB
 function HydrationGate({ children }) {
   const [hydrated, setHydrated] = useState(
@@ -40,6 +42,7 @@ function HydrationGate({ children }) {
 
   // Auto-backup hook - si attiva dopo l'hydration
   useAutoBackup();
+  useFirebaseSync();
 
   useEffect(() => {
     if (!hydrated) {
@@ -85,9 +88,9 @@ const router = createHashRouter([
       <ErrorBoundary>
         <ToastProvider>
           <HydrationGate>
-            <FinanceProvider>
+            <AuthGuard>
               <Layout />
-            </FinanceProvider>
+            </AuthGuard>
           </HydrationGate>
         </ToastProvider>
       </ErrorBoundary>

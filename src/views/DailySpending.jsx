@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { useFinanceData } from '../context/FinanceContext';
+import { useShallow } from 'zustand/react/shallow';
+import { useCashFlowMetrics } from '../hooks/computed/useCashFlowMetrics';
 import { useFinanceStore } from '../store/useFinanceStore';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import TransactionFormModal from '../components/TransactionFormModal';
@@ -9,7 +10,7 @@ import EmptyState from '../components/EmptyState';
 import KpiInfo from '../components/KpiInfo';
 
 export default function VariableCosts({ onNavigate }) {
-  const { data, computed } = useFinanceData();
+  const computed = useCashFlowMetrics();
   const deleteTransaction = useFinanceStore(state => state.deleteTransaction);
   const [filterNature, setFilterNature] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -25,6 +26,12 @@ const formatDate = (dateStr) => {
   const variableTx = (computed.periodTx || []).filter(
     t => t.nature === 'variable' || t.nature === 'extraordinary'
   );
+  
+  console.log('[DailySpending] Periodo attivo:', computed.activePeriod?.id);
+  console.log('[DailySpending] Tutte le tx del periodo:', computed.periodTx?.length || 0);
+  console.log('[DailySpending] Tx variabili/straordinarie:', variableTx.length);
+  console.log('[DailySpending] Dettagli tx:', computed.periodTx?.map(t => ({ id: t.id, nature: t.nature, description: t.description, status: t.status })) || []);
+  
   const sortedTx = [...variableTx].sort((a, b) => new Date(b.date) - new Date(a.date));
   const filteredTx = filterNature === 'all' ? sortedTx : sortedTx.filter(t => t.nature === filterNature);
 

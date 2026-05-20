@@ -1,28 +1,46 @@
-import React, { useState } from 'react';
-import { useFinanceStore } from '../store/useFinanceStore';
+import React, { useState, useEffect } from 'react';
+import { auth } from '../lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import Login from '../views/Login';
+import { useSyncStore } from '../hooks/useFirebaseSync';
 
 export default function AuthGuard({ children }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(
-    sessionStorage.getItem('isAuthenticated') === 'true'
-  );
-  
-  const settings = useFinanceStore(state => state.data.settings);
-  const correctEmail = settings?.authEmail || 'admin@finance.it';
-  const correctPassword = settings?.authPassword || 'admin';
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const isInitializing = useSyncStore(state => state.isInitializing);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setIsAuthenticated(true);
+      } else {
+        setIsAuthenticated(false);
+      }
+      setIsLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  if (isLoading || (isAuthenticated && isInitializing)) {
+    return (
+      <div style={{
+        minHeight: '100dvh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'var(--bg-primary)',
+        color: 'var(--text-muted)'
+      }}>
+        Sincronizzazione Cloud in corso...
+      </div>
+    );
+  }
 
   if (isAuthenticated) {
     return <>{children}</>;
   }
 
   return (
-    <Login 
-      correctEmail={correctEmail} 
-      correctPassword={correctPassword} 
-      onLogin={() => {
-        sessionStorage.setItem('isAuthenticated', 'true');
-        setIsAuthenticated(true);
-      }} 
-    />
+    <Login />
   );
 }

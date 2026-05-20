@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { useFinanceData } from '../context/FinanceContext';
+import { useShallow } from 'zustand/react/shallow';
+import { useOverviewMetrics } from '../hooks/computed/useOverviewMetrics';
 import { useFinanceStore } from '../store/useFinanceStore';
 import { CheckCircle2, Clock, AlertCircle, Plus, Trash2, X } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
@@ -8,7 +9,8 @@ import EmptyState from '../components/EmptyState';
 import KpiInfo from '../components/KpiInfo';
 
 export default function FixedCosts({ onNavigate }) {
-  const { data, computed } = useFinanceData();
+  const data = useFinanceStore(useShallow(state => state.data || {}));
+  const computed = useOverviewMetrics();
   const allFixedTx = computed.periodTx?.filter(t => t.nature === 'fixed') || [];
   const plannedFixed = allFixedTx.filter(t => t.status === 'planned');
   const paidFixed = allFixedTx.filter(t => t.status === 'paid');

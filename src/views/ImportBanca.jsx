@@ -1,12 +1,12 @@
 import React, { useState, useCallback } from 'react';
-import { useFinanceData } from '../context/FinanceContext';
+import { useShallow } from 'zustand/react/shallow';
 import { useFinanceStore } from '../store/useFinanceStore';
 import * as XLSX from 'xlsx';
 import { UploadCloud, CheckCircle, AlertCircle, FileSpreadsheet } from 'lucide-react';
 import { format, parse } from 'date-fns';
 
 export default function ImportBanca({ onNavigate }) {
-  const { data } = useFinanceData();
+  const data = useFinanceStore(useShallow(state => state.data || {}));
   const importTransactions = useFinanceStore(state => state.importTransactions);
   const learnCategorizationRule = useFinanceStore(state => state.learnCategorizationRule);
 
@@ -28,8 +28,18 @@ export default function ImportBanca({ onNavigate }) {
   const classifyTransaction = (description) => {
     const rules = data.categorizationRules || [];
     for (let rule of rules) {
-      if (new RegExp(rule.pattern, 'i').test(description)) {
-        return rule.categoryId;
+      try {
+        // Sanitizza il pattern: rimuovi sintassi Python (?i)
+        let cleanPattern = String(rule.pattern).replace(/^\(\?i\)/, '');
+        cleanPattern = cleanPattern.replace(/^\((.+)\)$/, '$1');
+        
+        if (cleanPattern && new RegExp(cleanPattern, 'i').test(description)) {
+          return rule.categoryId;
+        }
+      } catch (err) {
+        // Se il pattern è ancora invalido, skippa
+        console.warn(`Pattern invalido: "${rule.pattern}"`, err.message);
+        continue;
       }
     }
     return '';
@@ -90,6 +100,7 @@ export default function ImportBanca({ onNavigate }) {
             status: 'paid',
             categoryId: type === 'expense' ? classifyTransaction(fullDescription) : '',
             accountId: accountId,
+            periodId: data.settings.activePeriodId,
           };
         });
 
@@ -131,7 +142,18 @@ export default function ImportBanca({ onNavigate }) {
     setInbox(updated);
   };
 
+  const handleNatureChange = (index, newNature) => {
+    const updated = [...inbox];
+    updated[index].nature = newNature;
+    setInbox(updated);
+  };
+
   const handleImport = () => {
+    if (!data.settings.activePeriodId) {
+      alert('❌ Nessun periodo attivo! Vai su Admin → Registra Stipendio per crearne uno. Le transazioni verranno salvate ma non appariranno senza un periodo.');
+      return;
+    }
+
     const invalid = inbox.filter(t => t.type === 'expense' && !t.categoryId);
     if (invalid.length > 0) {
       alert(`Hai ${invalid.length} uscite non categorizzate. Assegna una categoria a tutte prima di importare.`);
@@ -158,6 +180,11 @@ export default function ImportBanca({ onNavigate }) {
       const { _index, ...rest } = t;
       return rest;
     });
+
+    console.log('[ImportBanca] Transazioni da importare:', cleanTx);
+    console.log('[ImportBanca] Periodo attivo:', data.settings.activePeriodId);
+    console.log('[ImportBanca] Variabili:', cleanTx.filter(t => t.nature === 'variable').length);
+    console.log('[ImportBanca] Fisse:', cleanTx.filter(t => t.nature === 'fixed').length);
 
     importTransactions(cleanTx);
     setInbox([]);
@@ -244,6 +271,7 @@ export default function ImportBanca({ onNavigate }) {
                   <th>Tipo</th>
                   <th style={{ textAlign: 'right' }}>Importo</th>
                   <th>Categoria</th>
+                  <th>Natura</th>
                 </tr>
               </thead>
               <tbody>
@@ -287,6 +315,26 @@ export default function ImportBanca({ onNavigate }) {
                         )}
                         {isAutoCat && classifyTransaction(tx.description) === tx.categoryId && (
                           <span className="text-xs text-green ml-2" title="Auto-categorizzato via RegEx">✨ Auto</span>
+                        )}
+                      </td>
+                      <td>
+                        {isIncome ? (
+                          <span className="text-xs text-muted">—</span>
+                        ) : (
+                          <select 
+                            value={tx.nature} 
+                            onChange={(e) => handleNatureChange(idx, e.target.value)}
+                            style={{ 
+                              padding: '0.3rem', 
+                              fontSize: '0.8rem', 
+                              borderColor: 'var(--border-color)',
+                              borderWidth: '1px'
+                            }}
+                          >
+                            <option value="variable">Variabile</option>
+                            <option value="fixed">Fissa</option>
+                            <option value="extraordinary">Straordinaria</option>
+                          </select>
                         )}
                       </td>
                     </tr>

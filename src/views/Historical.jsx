@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useFinanceData } from '../context/FinanceContext';
+
 import { useHistoricalAnalysis } from '../hooks/useHistoricalAnalysis';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { TrendingUp, TrendingDown, Minus, AlertCircle, CheckCircle, AlertTriangle } from 'lucide-react';
@@ -7,11 +7,10 @@ import EmptyState from '../components/EmptyState';
 import KpiInfo from '../components/KpiInfo';
 
 export default function Historical({ onNavigate }) {
-  const { data } = useFinanceData();
   const [viewType, setViewType] = useState('month');
   const [selectedPeriodId, setSelectedPeriodId] = useState(null);
 
-  const analysis = useHistoricalAnalysis(data, viewType, selectedPeriodId);
+  const analysis = useHistoricalAnalysis(viewType, selectedPeriodId);
 
   const formatEuro = (val) => new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(val);
   const formatPercent = (val) => `${val >= 0 ? '+' : ''}${val.toFixed(1)}%`;

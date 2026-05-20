@@ -20,11 +20,21 @@ function parseDayDate(val) {
   return isNaN(d.getTime()) ? null : d;
 }
 
-export function useFinanceComputed(data) {
-  return useMemo(() => {
-    if (!data || !data.settings) return {};
+import { useFinanceStore } from '../../store/useFinanceStore';
+import { useShallow } from 'zustand/react/shallow';
 
-    const { settings, periods, accounts, transactions, liabilities: storeLiabilities = [] } = data;
+export function useOverviewMetrics() {
+  const settings = useFinanceStore(useShallow(state => state.data.settings || {}));
+  const periods = useFinanceStore(useShallow(state => state.data.periods || []));
+  const accounts = useFinanceStore(useShallow(state => state.data.accounts || []));
+  const transactions = useFinanceStore(useShallow(state => state.data.transactions || []));
+  const storeLiabilities = useFinanceStore(useShallow(state => state.data.liabilities || []));
+  const recurringRules = useFinanceStore(useShallow(state => state.data.recurringRules || []));
+  const goals = useFinanceStore(useShallow(state => state.data.goals || []));
+  const categories = useFinanceStore(useShallow(state => state.data.categories || []));
+
+  return useMemo(() => {
+    if (!settings) return {};
     // AUDIT REAL CODE: useFinanceComputed contains implementations for many GAPs.
     // - isPeriodOverrun implemented [GAP-C06]
     // - cashDragAnnuo uses settings.expectedReturnRate [GAP-F05]
@@ -220,8 +230,8 @@ export function useFinanceComputed(data) {
       ? totalIncome / costiFissiTotaliCiclo
       : 0;
 
-    const totalSavings = data.goals ? data.goals.reduce((s, g) => s + (g.currentAmount || 0), 0) : 0;
-    const variableCategories = data.categories.filter(c => c.group === 'variable');
+    const totalSavings = goals ? goals.reduce((s, g) => s + (g.currentAmount || 0), 0) : 0;
+    const variableCategories = categories.filter(c => c.group === 'variable');
     const budgetVariabileTotale = variableCategories.reduce((sum, cat) =>
       sum + (settings.categoryBudgets?.[cat.id] || 0), 0);
 
@@ -293,7 +303,7 @@ export function useFinanceComputed(data) {
     const risparmioStimaCicloCorrente = Math.max(0, (saldoBaseChiusura ?? opening) - opening);
 
     // Weighted historic average over up to 6 closed periods (more weight to recent)
-    const recentClosed = data.periods.filter(p => p.id !== activePeriod.id && p.status === 'closed').slice(-6);
+    const recentClosed = periods.filter(p => p.id !== activePeriod.id && p.status === 'closed').slice(-6);
     let proiezioneAnnualeRisparmio;
     if (recentClosed.length >= 2) {
       const datiStorici = recentClosed.map((p, idx) => {
@@ -309,8 +319,8 @@ export function useFinanceComputed(data) {
       proiezioneAnnualeRisparmio = risparmioStimaCicloCorrente * 12;
     }
 
-    const goalsMonthlyTarget = data.goals
-      ? data.goals
+    const goalsMonthlyTarget = goals
+      ? goals
         .filter(g => g.deadline && g.currentAmount < g.targetAmount)
         .reduce((sum, g) => {
           const targetDate = g.deadline ? (g.deadline.length === 7 ? parseISO(g.deadline + '-01') : parseISO(g.deadline)) : today;
@@ -329,7 +339,7 @@ export function useFinanceComputed(data) {
 
     // --- PHASE 6: Alert Regole in Scadenza ---
     const ALERT_DAYS_BEFORE_EXPIRY = 30;
-    const regolaInScadenza = data.recurringRules
+    const regolaInScadenza = recurringRules
       .filter(rule => {
         if (!rule.endDate) return false;
         const endDateObj = rule.endDate ? parseISO(rule.endDate + '-01') : today; // endDate is 'yyyy-MM'
@@ -362,7 +372,7 @@ export function useFinanceComputed(data) {
     // Wealth Building
 
     // --- STORICO E WEALTH ACCUMULATION ---
-    const closedPeriods = data.periods
+    const closedPeriods = periods
       .filter(p => p.id !== activePeriod.id)
       .sort((a, b) => a.endDate.localeCompare(b.endDate)) // ← crescente: più vecchi prima
       .slice(-6); // ← ultimi 6 = più recenti
@@ -569,7 +579,7 @@ export function useFinanceComputed(data) {
 
     // --- GAP-S05: Validazione openingBalance vs teorico ---
     // teoricOpening = sum(accounts balances at start of period derived from transactions) fallback: activePeriod.openingBalance
-    const theoreticOpening = data.accounts ? data.accounts.reduce((s, a) => s + (a.openingBalance ?? a.balance ?? 0), 0) : (activePeriod.openingBalance ?? opening);
+    const theoreticOpening = accounts ? accounts.reduce((s, a) => s + (a.openingBalance ?? a.balance ?? 0), 0) : (activePeriod.openingBalance ?? opening);
     const openingBalanceValid = Math.abs((activePeriod.openingBalance ?? opening) - theoreticOpening) <= (settings.reconciliationTolerance ?? 10);
 
     // --- GAP-K03: P&L portafoglio investimenti ---
@@ -718,6 +728,5 @@ export function useFinanceComputed(data) {
       paidPeriodTx,
       plannedPeriodTx,
     };
-  }, [data]);
-
+  }, [settings, periods, accounts, transactions, storeLiabilities, recurringRules, goals, categories]);
 }
