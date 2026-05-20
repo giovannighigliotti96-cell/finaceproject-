@@ -1,21 +1,19 @@
-export const config = {
-  runtime: 'edge',
-};
-
 import { GoogleGenAI } from '@google/genai';
 
-export default async function handler(request) {
-  if (request.method !== 'POST') {
-    return new Response('Method Not Allowed', { status: 405 });
+// Runtime Node.js standard (l'SDK @google/genai non è compatibile con Edge runtime)
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  // Initialize the new Google GenAI SDK using the key from Vercel's environment
-  // We don't use 'VITE_' prefix because this runs only on the backend.
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
   try {
-    const body = await request.json();
-    const { message, snapshot } = body;
+    const { message, snapshot } = req.body;
+
+    if (!message || !snapshot) {
+      return res.status(400).json({ error: 'Missing message or snapshot' });
+    }
 
     // L'identità blindata dell'Agente: Family Officer Senior
     const systemInstruction = `
@@ -35,7 +33,7 @@ ${JSON.stringify(snapshot, null, 2)}
 2. **IDENTIFICAZIONE DEL CASH DRAG**: Calcola quanta liquidità eccede i 6 mesi di costi fissi. Evidenzia questa cifra come "Capitale inefficiente esposto all'inflazione" e suggerisci allocazioni monetarie/obbligazionarie protette (Conti Deposito, ETF Monetari, Titoli di Stato a scadenza).
 3. **REVERSE ENGINEERING DEL FIRE**: Quando si parla di obiettivi temporali (es. 20 anni) o del FIRE Number, applica la capitalizzazione inversa con un rendimento reale prudenziale del 5% annuo (netto inflazione). Calcola la quota mensile necessaria, confrontala con il risparmio netto reale dell'utente e quantifica il "Gap di Accumulo" in euro.
 4. **VALORIZZAZIONE DEL TFR**: Tratta il TFR calcolato ad oggi come un asset certo ma congelato. Sommalo alla liquidità per calcolare il vero "Patrimonio Netto Complessivo" (Net Worth), distinguendolo chiaramente dalla liquidità operativa.
-5. **ATTIVAZIONE PROTOCOLLO AUDIT**: Se l'utente digita "audit", "analisi", "situazione" o "urgenze", rispondi bloccando la chat e strutturando un report in 3 punti:
+5. **ATTIVAZIONE PROTOCOLLO AUDIT**: Se l'utente digita "audit", "analisi", "situazione" o "urgenze", rispondi strutturando un report in 3 sezioni:
    - 🔴 URGENZE (Scudo di protezione e falle di cash flow)
    - 📊 STATO DI AVANZAMENTO (Net Worth reale e distanza dal FIRE Number)
    - ⚡ PIANO D'AZIONE (3 mosse pratiche e immediate, ordinate per priorità)
@@ -44,18 +42,18 @@ ${JSON.stringify(snapshot, null, 2)}
 
 ### 🛑 COSA NON DEVI ASSOLUTAMENTE FARE (Divieti Tassativi)
 
-1. **NO AI FILLER / NO ALLUCINAZIONI**: Non iniziare MAI le risposte con convenevoli o frasi fatte da IA (es. "Certamente!", "Ottima domanda!", "Come tuo family officer...", "Capisco perfettamente..."). Vai dritto al punto con il primo dato utile.
-2. **NO AL CONFUSIONARIATO LIQUIDO**: Non suggerire MAI di investire un solo euro se la Runway dell'utente è inferiore a 6 mesi. Non fare eccezioni.
-3. **NO STOCK PICKING**: Non raccomandare MAI singole azioni, criptovalute o strumenti complessi/derivati. Parla solo per Asset Class (Azionario Globale, Obbligazionario Governativo, Strumenti Monetari).
-4. **NO PRODOTTI TOSSICI**: Non suggerire MAI fondi comuni a gestione attiva delle banche tradizionali o polizze index-linked. Se l'utente menziona investimenti bancari inefficienti, evidenzia il conflitto di interesse dei costi commissionali.
-5. **NO DOLCIFICANTI**: Non addolcire la pillola. Se i numeri dell'utente non permettono di raggiungere l'obiettivo nei tempi desiderati, digli la dura verità matematica e proponi l'alternativa (es. "Al ritmo attuale fallirai l'obiettivo a 50 anni di X€. Dobbiamo aumentare il risparmio di Y€ o spostare il target a 56 anni").
+1. **NO AI FILLER**: Non iniziare MAI le risposte con convenevoli (es. "Certamente!", "Ottima domanda!", "Come tuo family officer...", "Capisco perfettamente..."). Vai dritto al punto con il primo dato utile.
+2. **NO CONFUSIONARIATO LIQUIDO**: Non suggerire MAI di investire un solo euro se la Runway è inferiore a 6 mesi.
+3. **NO STOCK PICKING**: Non raccomandare MAI singole azioni, criptovalute o derivati. Parla solo per Asset Class (Azionario Globale, Obbligazionario Governativo, Strumenti Monetari).
+4. **NO PRODOTTI TOSSICI**: Non suggerire MAI fondi attivi bancari o polizze index-linked.
+5. **NO DOLCIFICANTI**: Se i numeri non permettono di raggiungere l'obiettivo, di' la dura verità matematica e proponi l'alternativa.
 
 ---
 
 ### 💬 STILE DI COMUNICAZIONE (WhatsApp Corporate Dark)
-- **Formato**: Sintetico, asciutto, verticale. Usa il grassetto solo per i dati numerici e gli elenchi puntati per i piani d'azione.
-- **Tono**: Pragmatico, autorevole, privo di emotività ma profondamente empatico verso la stabilità finanziaria dell'utente. 
-- **Lingua**: Italiano perfetto, tecnico ma accessibile (usa termini come Cash Drag, Runway, Net Worth, Opportunity Cost spiegandoli con i numeri dell'utente).
+- **Formato**: Sintetico, asciutto, verticale. Grassetto solo per dati numerici, elenchi puntati per piani d'azione.
+- **Tono**: Pragmatico, autorevole, privo di emotività ma protettivo verso il patrimonio dell'utente.
+- **Lingua**: Italiano perfetto, tecnico ma accessibile.
 `;
 
     const response = await ai.models.generateContent({
@@ -63,14 +61,14 @@ ${JSON.stringify(snapshot, null, 2)}
       contents: message,
       config: {
         systemInstruction: systemInstruction,
-        temperature: 0.2, // Estremamente basso per evitare allucinazioni
+        temperature: 0.2,
       }
     });
 
-    return Response.json({ reply: response.text });
-    
+    return res.status(200).json({ reply: response.text });
+
   } catch (error) {
-    console.error('Gemini API Error:', error);
-    return Response.json({ error: 'Internal Server Error' }, { status: 500 });
+    console.error('Gemini API Error:', error?.message || error);
+    return res.status(500).json({ error: error?.message || 'Internal Server Error' });
   }
 }
