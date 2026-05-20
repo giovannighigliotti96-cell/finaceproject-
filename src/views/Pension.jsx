@@ -11,9 +11,26 @@ import {
   Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
 
+// ─── Utils ───────────────────────────────────────────────────────────────────
 const formatEuro = (val) =>
   new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(val ?? 0);
 
+/** Converte in modo sicuro qualsiasi input a Number; ritorna fallback se non finito */
+const toNum = (val, fallback = 0) => {
+  const n = Number(val);
+  return isFinite(n) ? n : fallback;
+};
+
+/** Handler onChange per input numerici: salva sempre un Number, mai una stringa */
+const numChange = (setter, key, isInt = false) => (e) => {
+  const raw = e.target.value;
+  // Se il campo è vuoto, salviamo 0 temporaneamente (non undefined)
+  if (raw === '' || raw === null) { setter(key, 0); return; }
+  const n = isInt ? parseInt(raw, 10) : parseFloat(raw);
+  setter(key, isFinite(n) ? n : 0);
+};
+
+// ─── Stili condivisi ─────────────────────────────────────────────────────────
 const inputStyle = {
   width: '100%',
   padding: '0.65rem 0.75rem',
@@ -34,6 +51,7 @@ const labelStyle = {
   marginBottom: '0.4rem',
 };
 
+// ─── Sub-componenti ───────────────────────────────────────────────────────────
 function FormField({ label, children }) {
   return (
     <div>
@@ -56,15 +74,25 @@ function KpiCard({ icon: Icon, label, value, sub, color, borderColor }) {
   );
 }
 
+// ─── Vista principale ─────────────────────────────────────────────────────────
 export default function Pension() {
-  const cfg = useFinanceStore(useShallow(state => state.data.settings?.pensionConfig || {}));
+  const cfg = useFinanceStore(useShallow(state => state.data?.settings?.pensionConfig || {}));
   const updatePensionConfig = useFinanceStore(state => state.updatePensionConfig);
 
   const proj = usePensionProjection();
 
+  // Setter centralizzato — always saves to the NEW field names
   const set = (key, val) => updatePensionConfig({ [key]: val });
 
-  const isVoluntaryActive = (Number(cfg.voluntaryContributionPercentage) || 0) > 0;
+  // Lettura con backward-compat per stato persistito con vecchi nomi
+  const portalBalance   = toNum(cfg.currentTfrBalance ?? cfg.currentTfr, 0);
+  const monthlyAccrual  = toNum(cfg.monthlyAccrual ?? cfg.monthlyContribution, 175);
+  const currentAge      = toNum(cfg.currentAge, 30);
+  const retirementAge   = toNum(cfg.retirementAge, 67);
+  const annualReturn    = toNum(cfg.annualReturn, 3.5);
+  const lastStatement   = cfg.lastStatementDate || '2025-12';
+  const tfrDest         = cfg.tfrDestination || 'fondo';
+  const isVoluntaryActive = toNum(cfg.voluntaryContributionPercentage, 0) > 0;
 
   return (
     <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '1.5rem', paddingBottom: '100px' }}>
@@ -94,7 +122,7 @@ export default function Pension() {
             {/* Destinazione TFR */}
             <FormField label="Destinazione TFR">
               <select
-                value={cfg.tfrDestination || 'fondo'}
+                value={tfrDest}
                 onChange={e => set('tfrDestination', e.target.value)}
                 style={inputStyle}
               >
@@ -103,7 +131,7 @@ export default function Pension() {
               </select>
             </FormField>
 
-            {/* Divider */}
+            {/* Sezione estratto conto */}
             <div style={{ borderTop: '1px dashed var(--border-color)', paddingTop: '0.75rem' }}>
               <div style={{ fontSize: '0.68rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--chart-secondary)', marginBottom: '0.75rem' }}>
                 📋 Estratto Conto Portale Fondo
@@ -112,9 +140,11 @@ export default function Pension() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 <FormField label="Saldo Ufficiale Portale (€)">
                   <input
-                    type="number" min="0" style={inputStyle}
-                    value={cfg.currentTfrBalance ?? 0}
-                    onChange={e => set('currentTfrBalance', parseFloat(e.target.value) || 0)}
+                    type="number"
+                    min="0"
+                    style={inputStyle}
+                    value={portalBalance}
+                    onChange={numChange(set, 'currentTfrBalance', false)}
                   />
                   <p style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
                     Il saldo che vedi sul portale del fondo (può essere "vecchio").
@@ -123,8 +153,9 @@ export default function Pension() {
 
                 <FormField label="Mese Competenza Estratto Conto">
                   <input
-                    type="month" style={inputStyle}
-                    value={cfg.lastStatementDate || '2025-12'}
+                    type="month"
+                    style={inputStyle}
+                    value={lastStatement}
                     onChange={e => set('lastStatementDate', e.target.value)}
                   />
                   <p style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
@@ -134,15 +165,18 @@ export default function Pension() {
 
                 <FormField label="Quota TFR Mensile in Busta Paga (€)">
                   <input
-                    type="number" min="0" step="1" style={inputStyle}
-                    value={cfg.monthlyAccrual ?? 175}
-                    onChange={e => set('monthlyAccrual', parseFloat(e.target.value) || 0)}
+                    type="number"
+                    min="0"
+                    step="1"
+                    style={inputStyle}
+                    value={monthlyAccrual}
+                    onChange={numChange(set, 'monthlyAccrual', false)}
                   />
                 </FormField>
               </div>
             </div>
 
-            {/* Gap Banner */}
+            {/* Gap Banner — visibile solo se c'è un mismatch */}
             {proj.gapMonths > 0 && (
               <div style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.4)', borderRadius: 'var(--radius-md)', padding: '0.75rem' }}>
                 <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#818cf8', marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -154,7 +188,7 @@ export default function Pension() {
               </div>
             )}
 
-            {/* Divider */}
+            {/* Dati anagrafici */}
             <div style={{ borderTop: '1px dashed var(--border-color)', paddingTop: '0.75rem' }}>
               <div style={{ fontSize: '0.68rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
                 👤 Dati Personali & Proiezione
@@ -163,28 +197,38 @@ export default function Pension() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                 <FormField label="Età Attuale">
                   <input
-                    type="number" min="18" max="80" style={inputStyle}
-                    value={cfg.currentAge ?? 30}
-                    onChange={e => set('currentAge', parseInt(e.target.value) || 30)}
+                    type="number"
+                    min="18"
+                    max="80"
+                    style={inputStyle}
+                    value={currentAge}
+                    onChange={numChange(set, 'currentAge', true)}
                   />
                 </FormField>
                 <FormField label="Età Pensione">
                   <input
-                    type="number" min="50" max="80" style={inputStyle}
-                    value={cfg.retirementAge ?? 67}
-                    onChange={e => set('retirementAge', parseInt(e.target.value) || 67)}
+                    type="number"
+                    min="50"
+                    max="80"
+                    style={inputStyle}
+                    value={retirementAge}
+                    onChange={numChange(set, 'retirementAge', true)}
                   />
                 </FormField>
               </div>
             </div>
 
             {/* Rendimento (solo fondo) */}
-            {cfg.tfrDestination !== 'azienda' && (
+            {tfrDest !== 'azienda' && (
               <FormField label="Rendimento Annuo Stimato (%)">
                 <input
-                  type="number" min="0" max="20" step="0.1" style={inputStyle}
-                  value={cfg.annualReturn ?? 3.5}
-                  onChange={e => set('annualReturn', parseFloat(e.target.value) || 0)}
+                  type="number"
+                  min="0"
+                  max="20"
+                  step="0.1"
+                  style={inputStyle}
+                  value={annualReturn}
+                  onChange={numChange(set, 'annualReturn', false)}
                 />
                 <p style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
                   Capitalizzato mensilmente (tasso / 12).
@@ -192,7 +236,8 @@ export default function Pension() {
               </FormField>
             )}
 
-            {cfg.tfrDestination === 'azienda' && (
+            {/* Banner info TFR in azienda */}
+            {tfrDest === 'azienda' && (
               <div style={{ background: 'var(--status-yellow-bg)', border: '1px solid var(--status-yellow)', borderRadius: 'var(--radius-md)', padding: '0.75rem' }}>
                 <p style={{ fontSize: '0.72rem', color: 'var(--status-yellow)', lineHeight: 1.4 }}>
                   <strong>Rivalutazione INPS applicata:</strong> 1.5% fisso + 75% inflazione (2%) = ~3% annuo. Tassazione uscita: 23% flat (IRPEF media).
@@ -200,8 +245,8 @@ export default function Pension() {
               </div>
             )}
 
-            {/* Contribuzione Volontaria (solo fondo) */}
-            {cfg.tfrDestination !== 'azienda' && (
+            {/* Toggle Contribuzione Volontaria (solo fondo) */}
+            {tfrDest !== 'azienda' && (
               <div style={{ borderTop: '1px dashed var(--border-color)', paddingTop: '0.75rem' }}>
                 <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: 'pointer' }}>
                   <input
@@ -229,6 +274,7 @@ export default function Pension() {
           {/* KPI Grid */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '1rem' }}>
 
+            {/* Saldo Reale Oggi */}
             <div className="card" style={{ borderTop: '3px solid #818cf8', background: 'rgba(99,102,241,0.06)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
                 <CheckCircle2 size={14} color="#818cf8" />
@@ -238,7 +284,7 @@ export default function Pension() {
                 {formatEuro(proj.realCurrentBalance)}
               </div>
               <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.4rem', lineHeight: 1.3 }}>
-                Portale: {formatEuro(Number(cfg.currentTfrBalance) || 0)} + {proj.gapMonths} mesi non contabilizzati ({formatEuro(proj.gapAccrued)})
+                Portale: {formatEuro(portalBalance)} + {proj.gapMonths} mesi non contabilizzati ({formatEuro(proj.gapAccrued)})
               </p>
             </div>
 
@@ -251,6 +297,7 @@ export default function Pension() {
               borderColor="var(--chart-tertiary)"
             />
 
+            {/* Tassazione */}
             <div className="card" style={{ borderTop: '3px solid var(--status-red)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
                 <Info size={14} color="var(--status-red)" />
@@ -261,7 +308,7 @@ export default function Pension() {
               </div>
               <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.4rem', lineHeight: 1.3 }}>
                 {proj.tfrDest === 'fondo'
-                  ? `Agevolazione FP: max 15% → min 9%`
+                  ? 'Agevolazione FP: max 15% → min 9%'
                   : 'IRPEF media standard (flat 23%)'}
               </p>
             </div>
@@ -275,7 +322,8 @@ export default function Pension() {
               borderColor="var(--status-green)"
             />
 
-            <div className="card" style={{ borderTop: '3px solid var(--chart-primary)', gridColumn: 'span 1' }}>
+            {/* Potere d'acquisto reale */}
+            <div className="card" style={{ borderTop: '3px solid var(--chart-primary)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
                 <ShieldCheck size={14} color="var(--chart-primary)" />
                 <span style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)' }}>Potere d'Acquisto Reale</span>
@@ -301,15 +349,15 @@ export default function Pension() {
               <AreaChart data={proj.projectionChartData} margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
                 <defs>
                   <linearGradient id="gNominal" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--chart-tertiary)" stopOpacity={0.6} />
+                    <stop offset="5%"  stopColor="var(--chart-tertiary)" stopOpacity={0.6} />
                     <stop offset="95%" stopColor="var(--chart-tertiary)" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="gReal" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--chart-primary)" stopOpacity={0.6} />
+                    <stop offset="5%"  stopColor="var(--chart-primary)" stopOpacity={0.6} />
                     <stop offset="95%" stopColor="var(--chart-primary)" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="gInvested" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--text-muted)" stopOpacity={0.35} />
+                    <stop offset="5%"  stopColor="var(--text-muted)" stopOpacity={0.35} />
                     <stop offset="95%" stopColor="var(--text-muted)" stopOpacity={0} />
                   </linearGradient>
                 </defs>
@@ -339,10 +387,7 @@ export default function Pension() {
                   formatter={(value, name) => [formatEuro(value), name]}
                   labelFormatter={label => `Età: ${label} anni`}
                 />
-                <Legend
-                  wrapperStyle={{ fontSize: '0.78rem', paddingTop: '16px' }}
-                  iconType="circle"
-                />
+                <Legend wrapperStyle={{ fontSize: '0.78rem', paddingTop: '16px' }} iconType="circle" />
                 <Area
                   type="monotone"
                   dataKey="nominalBalance"
