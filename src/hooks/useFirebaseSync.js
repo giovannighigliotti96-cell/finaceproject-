@@ -118,6 +118,9 @@ export function useFirebaseSync() {
         cloudIsMigratedRef.current = true;
         
         setSyncStatus('synced');
+        
+        // Evitiamo che l'aggiornamento di lastCloudSync faccia ripartire il salvataggio all'infinito!
+        skipNextWriteRef.current = true;
         updateSettings({ lastCloudSync: new Date().toISOString() });
       } catch (error) {
         console.error("Errore durante il salvataggio:", error);
