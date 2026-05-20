@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useOverviewMetrics } from '../hooks/computed/useOverviewMetrics';
 import { useFinanceStore } from '../store/useFinanceStore';
-import { Landmark, Shield, TrendingUp, Wallet, Plus, Trash2, Edit3, X, Check, Building } from 'lucide-react';
+import { usePensionProjection } from '../hooks/computed/usePensionProjection';
+import { Landmark, Shield, TrendingUp, Wallet, Plus, Trash2, Edit3, X, Check, Building, Briefcase } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { format, parseISO } from 'date-fns';
 import { it } from 'date-fns/locale';
@@ -41,6 +42,9 @@ export default function Accounts({ onNavigate }) {
   const updateAccount = useFinanceStore(state => state.updateAccount);
   const deleteAccount = useFinanceStore(state => state.deleteAccount);
   const showToast = useToast();
+
+  // TFR: saldo reale stimato ad oggi (portale + mesi di gap non contabilizzati)
+  const { realCurrentBalance: tfrRealBalance = 0 } = usePensionProjection();
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -96,7 +100,9 @@ export default function Accounts({ onNavigate }) {
     .filter(a => a.type === 'real_estate')
     .reduce((sum, acc) => sum + (acc.currentBalance ?? acc.balance ?? 0), 0);
 
-  const totalNetWorth = liquidNetWorth + realEstateValue;
+  // TFR incluso nel Patrimonio Netto Totale come asset previdenziale stimato
+  const tfrAsset = isFinite(tfrRealBalance) && tfrRealBalance > 0 ? tfrRealBalance : 0;
+  const totalNetWorth = liquidNetWorth + realEstateValue + tfrAsset;
 
   // G-12: storico patrimonio — preferiamo snapshot contabili dai periodi chiusi se disponibili.
   // Se non esistono periodi chiusi, mostriamo comunque una "wealth proxy" chiaramente etichettata.
@@ -177,7 +183,7 @@ export default function Accounts({ onNavigate }) {
         )}
         <div style={{
   display: 'grid',
-  gridTemplateColumns: 'repeat(4, 1fr)',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
   gap: '1rem',
   marginTop: '2rem'
 }}>
@@ -221,6 +227,24 @@ export default function Accounts({ onNavigate }) {
       </div>
     </div>
   ))}
+  {/* 5ª card: Previdenza / TFR */}
+  <div style={{
+    padding: '1rem',
+    backgroundColor: 'var(--bg-primary)',
+    borderRadius: 'var(--radius-md)',
+    borderTop: '3px solid #818cf8',
+    background: 'linear-gradient(160deg, rgba(99,102,241,0.08) 0%, var(--bg-primary) 100%)'
+  }}>
+    <div className="kpi-label mb-1" style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+      <Briefcase size={11} /> Previdenza / TFR
+    </div>
+    <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#a5b4fc' }}>
+      {formatEuro(tfrAsset)}
+    </div>
+    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+      TFR reale stimato ad oggi
+    </div>
+  </div>
 </div>
       </div>
       {/* INVESTMENT P&L */}
