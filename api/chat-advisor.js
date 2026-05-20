@@ -1,12 +1,13 @@
-import { GoogleGenAI } from '@google/genai';
-
-// Runtime Node.js standard (l'SDK @google/genai non è compatibile con Edge runtime)
+// Chiamata diretta all'API REST di Gemini — zero dipendenze, zero problemi di runtime.
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  const API_KEY = process.env.GEMINI_API_KEY;
+  if (!API_KEY) {
+    return res.status(500).json({ error: 'GEMINI_API_KEY non configurata nelle Environment Variables di Vercel.' });
+  }
 
   try {
     const { message, snapshot } = req.body;
@@ -15,7 +16,6 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing message or snapshot' });
     }
 
-    // L'identità blindata dell'Agente: Family Officer Senior
     const systemInstruction = `
 Sei il Family Officer Senior e Private Wealth Manager personale dell'utente. Il tuo obiettivo è fornire consulenza patrimoniale d'élite, confidenziale, diretta e matematicamente impeccabile. Non sei un assistente clienti generico: ragioni e agisci come un gestore di grandi patrimoni (UHNW) prestato alla finanza personale.
 
@@ -56,19 +56,37 @@ ${JSON.stringify(snapshot, null, 2)}
 - **Lingua**: Italiano perfetto, tecnico ma accessibile.
 `;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
-      contents: message,
-      config: {
-        systemInstruction: systemInstruction,
-        temperature: 0.2,
-      }
+    // Chiamata REST diretta all'API di Gemini (nessun SDK necessario)
+    const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`;
+
+    const geminiResponse = await fetch(GEMINI_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system_instruction: {
+          parts: [{ text: systemInstruction }]
+        },
+        contents: [
+          { role: 'user', parts: [{ text: message }] }
+        ],
+        generationConfig: {
+          temperature: 0.2,
+        }
+      })
     });
 
-    return res.status(200).json({ reply: response.text });
+    const data = await geminiResponse.json();
+
+    if (!geminiResponse.ok) {
+      console.error('Gemini API error:', JSON.stringify(data));
+      return res.status(500).json({ error: data?.error?.message || 'Gemini API Error' });
+    }
+
+    const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Nessuna risposta generata.';
+    return res.status(200).json({ reply });
 
   } catch (error) {
-    console.error('Gemini API Error:', error?.message || error);
-    return res.status(500).json({ error: error?.message || 'Internal Server Error' });
+    console.error('Server error:', error);
+    return res.status(500).json({ error: error.message || 'Internal Server Error' });
   }
 }
