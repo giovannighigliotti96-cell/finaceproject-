@@ -4,6 +4,8 @@ import { useShallow } from 'zustand/react/shallow';
 import { useOverviewMetrics } from '../hooks/computed/useOverviewMetrics';
 import { usePensionProjection } from '../hooks/computed/usePensionProjection';
 import { Send, Bot, User, Sparkles } from 'lucide-react';
+import { extractUserProfile } from '../services/userProfileService';
+import { geminiService } from '../services/geminiService';
 
 export default function AiAdvisor() {
   const [messages, setMessages] = useState([
@@ -17,6 +19,12 @@ export default function AiAdvisor() {
   const storeData = useFinanceStore(useShallow(state => state.data || {}));
   const computed = useOverviewMetrics();
   const { realCurrentBalance: tfrAdOggi } = usePensionProjection();
+
+  // 2. Inizializza o aggiorna l'agente ogni volta che cambiano i dati
+  useEffect(() => {
+    const profile = extractUserProfile(storeData, computed, tfrAdOggi);
+    geminiService.initialize(profile);
+  }, [storeData, computed, tfrAdOggi]);
 
   // Autoscroll della chat
   useEffect(() => {
@@ -32,42 +40,13 @@ export default function AiAdvisor() {
     setMessages(prev => [...prev, { role: 'user', text: userMessage }]);
     setIsLoading(true);
 
-    // Mappa i totali in modo robusto da useOverviewMetrics e dallo store
-    const liquiditaOperativa = computed.operatingLiquidity || 0;
-    const risparmiVincolati = computed.restrictedSavings || 0;
-    const investimenti = computed.investments || 0;
-    
-    // 2. Impacchettamento dello Snapshot Patrimoniale Real-Time
-    const financialSnapshot = {
-      liquiditaOperativa: liquiditaOperativa,
-      risparmiVincolati: risparmiVincolati,
-      liquiditaTotaleImmediata: liquiditaOperativa + risparmiVincolati,
-      investimenti: investimenti,
-      costiFissiMensili: computed.costiFissiTotaliCiclo || 0,
-      spesaMensileMedia: (computed.costiFissiTotaliCiclo || 0) + (computed.spesaMediaGiornalieraVariabileAttuale * 30 || 0),
-      risparmioMensileNetto: computed.risparmioNettoMensile || 0,
-      tfrMaturatoAdOggi: tfrAdOggi || 0,
-      fireTargetNumber: computed.fireNumber || 363057,
-      patrimonioNettoComplessivo: computed.netWorth || 0,
-    };
-
     try {
-      // 3. Chiamata alla rotta API che fa da proxy sicuro verso Gemini
-      const response = await fetch('/api/chat-advisor', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: userMessage,
-          snapshot: financialSnapshot // Il contesto viaggia blindato qui
-        })
-      });
-
-      const data = await response.json();
-      
-      setMessages(prev => [...prev, { role: 'assistant', text: data.reply || 'Errore nella generazione della risposta.' }]);
+      // 3. Chiamata al servizio frontend che gestisce la logica proxy e l'history
+      const reply = await geminiService.sendMessage(userMessage);
+      setMessages(prev => [...prev, { role: 'assistant', text: reply }]);
     } catch (error) {
       console.error('Errore durante la chiamata all’Advisor:', error);
-      setMessages(prev => [...prev, { role: 'assistant', text: 'Errore di connessione. Verifica la configurazione della tua API Key.' }]);
+      setMessages(prev => [...prev, { role: 'assistant', text: 'Errore di connessione. Verifica la configurazione della tua API Key o la disponibilità del servizio.' }]);
     } finally {
       setIsLoading(false);
     }
