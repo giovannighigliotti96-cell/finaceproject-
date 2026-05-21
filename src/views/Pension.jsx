@@ -154,6 +154,7 @@ export default function Pension() {
                 <FormField label="Mese Competenza Estratto Conto">
                   <input
                     type="month"
+                    max="2050-12"
                     style={inputStyle}
                     value={lastStatement}
                     onChange={e => set('lastStatementDate', e.target.value)}
