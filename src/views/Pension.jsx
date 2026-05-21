@@ -2,13 +2,14 @@ import React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useFinanceStore } from '../store/useFinanceStore';
 import { usePensionProjection } from '../hooks/computed/usePensionProjection';
+import { useOverviewMetrics } from '../hooks/computed/useOverviewMetrics';
 import {
   Briefcase, TrendingUp, ShieldCheck, PiggyBank,
   Scale, AlertCircle, CheckCircle2, Info
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend
+  Tooltip, ResponsiveContainer, Legend, ReferenceLine
 } from 'recharts';
 
 // ─── Utils ───────────────────────────────────────────────────────────────────
@@ -24,7 +25,6 @@ const toNum = (val, fallback = 0) => {
 /** Handler onChange per input numerici: salva sempre un Number, mai una stringa */
 const numChange = (setter, key, isInt = false) => (e) => {
   const raw = e.target.value;
-  // Se il campo è vuoto, salviamo 0 temporaneamente (non undefined)
   if (raw === '' || raw === null) { setter(key, 0); return; }
   const n = isInt ? parseInt(raw, 10) : parseFloat(raw);
   setter(key, isFinite(n) ? n : 0);
@@ -61,14 +61,21 @@ function FormField({ label, children }) {
   );
 }
 
-function KpiCard({ icon: Icon, label, value, sub, color, borderColor }) {
+function KpiCard({ icon: Icon, label, value, sub, color, borderColor, badge }) {
   return (
-    <div className="card" style={{ borderTop: `3px solid ${borderColor || 'var(--border-color)'}` }}>
+    <div className="card" style={{ borderTop: `3px solid ${borderColor || 'var(--border-color)'}`, transition: 'opacity 0.3s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
         {Icon && <Icon size={14} color={color || 'var(--text-muted)'} />}
         <span style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)' }}>{label}</span>
       </div>
-      <div style={{ fontSize: '1.6rem', fontWeight: 900, color: color || 'var(--text-primary)', lineHeight: 1 }}>{value}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div style={{ fontSize: '2rem', fontWeight: 900, color: color || 'var(--text-primary)', lineHeight: 1 }}>{value}</div>
+        {badge && (
+          <span style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', backgroundColor: 'rgba(16, 185, 129, 0.15)', color: '#10b981', padding: '0.2rem 0.4rem', borderRadius: '4px' }}>
+            {badge}
+          </span>
+        )}
+      </div>
       {sub && <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.4rem', lineHeight: 1.3 }}>{sub}</p>}
     </div>
   );
@@ -80,6 +87,7 @@ export default function Pension() {
   const updatePensionConfig = useFinanceStore(state => state.updatePensionConfig);
 
   const proj = usePensionProjection();
+  const { fireNumber } = useOverviewMetrics(); // Per linea di riferimento FIRE
 
   // Setter centralizzato — always saves to the NEW field names
   const set = (key, val) => updatePensionConfig({ [key]: val });
@@ -108,13 +116,23 @@ export default function Pension() {
         </p>
       </header>
 
+      {/* ── ALERT GAP BANNER (Spostato in cima, condizionale) ── */}
+      {proj.gapMonths > 0 && (
+        <div style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid #f59e0b', borderRadius: 'var(--radius-md)', padding: '1rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <AlertCircle size={22} color="#f59e0b" style={{ flexShrink: 0 }} />
+          <div style={{ color: '#f59e0b', fontSize: '0.9rem', fontWeight: 600 }}>
+            Gap rilevato: i contributi degli ultimi {proj.gapMonths} mesi ({formatEuro(proj.gapAccrued)}) non sono ancora stati contabilizzati sul portale del fondo.
+          </div>
+        </div>
+      )}
+
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', alignItems: 'flex-start' }}>
 
         {/* ── COLONNA SINISTRA: FORM ── */}
-        <div className="card" style={{ flex: '0 0 340px', position: 'sticky', top: '1rem' }}>
-          <h2 style={{ fontSize: '1rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem' }}>
-            <Scale size={18} color="var(--chart-secondary)" />
-            Parametri Simulazione
+        <div className="card" style={{ flex: '1 1 340px', minWidth: '320px', maxWidth: '400px', position: 'sticky', top: '1rem' }}>
+          <h2 style={{ fontSize: '0.85rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem' }}>
+            <Scale size={16} />
+            ⚙️ Parametri Simulazione
           </h2>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -176,18 +194,6 @@ export default function Pension() {
                 </FormField>
               </div>
             </div>
-
-            {/* Gap Banner — visibile solo se c'è un mismatch */}
-            {proj.gapMonths > 0 && (
-              <div style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.4)', borderRadius: 'var(--radius-md)', padding: '0.75rem' }}>
-                <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#818cf8', marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <AlertCircle size={13} /> Gap rilevato: {proj.gapMonths} mesi
-                </div>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                  L'app aggiunge <strong style={{ color: '#a5b4fc' }}>{formatEuro(proj.gapAccrued)}</strong> già maturati in azienda e non ancora contabilizzati sul portale.
-                </div>
-              </div>
-            )}
 
             {/* Dati anagrafici */}
             <div style={{ borderTop: '1px dashed var(--border-color)', paddingTop: '0.75rem' }}>
@@ -270,155 +276,171 @@ export default function Pension() {
         </div>
 
         {/* ── COLONNA DESTRA: KPI + CHART ── */}
-        <div style={{ flex: '1 1 600px', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+        <div style={{ flex: '2 1 600px', display: 'flex', flexDirection: 'column', gap: '1.25rem', minWidth: '0' }}>
 
-          {/* KPI Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '-0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <h2 style={{ fontSize: '0.85rem', fontWeight: 800, margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
+              📊 Situazione Attuale
+            </h2>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Proiezione basata sui parametri a sinistra →</span>
+          </div>
 
-            {/* Saldo Reale Oggi */}
-            <div className="card" style={{ borderTop: '3px solid #818cf8', background: 'rgba(99,102,241,0.06)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
-                <CheckCircle2 size={14} color="#818cf8" />
-                <span style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)' }}>Saldo Reale Stimato Ad Oggi</span>
-              </div>
-              <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#a5b4fc', lineHeight: 1 }}>
-                {formatEuro(proj.realCurrentBalance)}
-              </div>
-              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.4rem', lineHeight: 1.3 }}>
-                Portale: {formatEuro(portalBalance)} + {proj.gapMonths} mesi non contabilizzati ({formatEuro(proj.gapAccrued)})
-              </p>
+          {/* HERO CARD: Saldo Reale Oggi */}
+          <div className="card" style={{ borderTop: '4px solid #00BCD4', background: 'rgba(0, 188, 212, 0.05)', padding: '2rem', transition: 'opacity 0.3s ease' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
+              <CheckCircle2 size={16} color="#00BCD4" />
+              <span style={{ fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)' }}>Saldo Reale Stimato Ad Oggi</span>
             </div>
+            <div style={{ fontSize: '3.5rem', fontWeight: 900, color: '#00BCD4', lineHeight: 1, margin: '0.5rem 0' }}>
+              {formatEuro(proj.realCurrentBalance)}
+            </div>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+              Portale: {formatEuro(portalBalance)} <span style={{ opacity: 0.5 }}>+</span> {proj.gapMonths} mesi non contabilizzati ({formatEuro(proj.gapAccrued)})
+            </p>
+          </div>
 
+          {/* KPI Grid (3-col) */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
             <KpiCard
               icon={TrendingUp}
               label="Capitale Lordo a Pensione"
               value={formatEuro(proj.grossBalanceAtRetirement)}
               sub={`Versato totale: ${formatEuro(proj.totalInvested)}`}
-              color="var(--chart-tertiary)"
+              color="var(--text-primary)"
               borderColor="var(--chart-tertiary)"
             />
 
-            {/* Tassazione */}
-            <div className="card" style={{ borderTop: '3px solid var(--status-red)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
-                <Info size={14} color="var(--status-red)" />
-                <span style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)' }}>Tassazione Uscita</span>
-              </div>
-              <div style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--status-red)', lineHeight: 1 }}>
-                {(proj.applicableTaxRate * 100).toFixed(1)}%
-              </div>
-              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.4rem', lineHeight: 1.3 }}>
-                {proj.tfrDest === 'fondo'
-                  ? 'Agevolazione FP: max 15% → min 9%'
-                  : 'IRPEF media standard (flat 23%)'}
-              </p>
-            </div>
+            {/* Tassazione (Aggiornata semantica) */}
+            <KpiCard
+              icon={Info}
+              label="Tassazione Uscita"
+              value={`${(proj.applicableTaxRate * 100).toFixed(1)}%`}
+              badge={proj.tfrDest === 'fondo' ? 'Agevolato' : null}
+              sub={proj.tfrDest === 'fondo' ? 'Agevolazione FP: max 15% → min 9%' : 'IRPEF media standard (flat 23%)'}
+              color="var(--text-primary)"
+              borderColor="var(--border-color)"
+            />
 
             <KpiCard
               icon={PiggyBank}
-              label="Capitale Netto Liquidato"
-              value={formatEuro(proj.netBalanceAtRetirement)}
-              sub="Quello che riceverai sul conto"
-              color="var(--status-green)"
-              borderColor="var(--status-green)"
+              label="Potere d'Acquisto Reale"
+              value={formatEuro(proj.realPowerOfPurchase)}
+              sub="Netto svalutato per inflazione 2%/anno"
+              color="var(--text-primary)"
+              borderColor="var(--chart-primary)"
             />
-
-            {/* Potere d'acquisto reale */}
-            <div className="card" style={{ borderTop: '3px solid var(--chart-primary)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
-                <ShieldCheck size={14} color="var(--chart-primary)" />
-                <span style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)' }}>Potere d'Acquisto Reale</span>
-              </div>
-              <div style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--chart-primary)', lineHeight: 1 }}>
-                {formatEuro(proj.realPowerOfPurchase)}
-              </div>
-              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.4rem', lineHeight: 1.3 }}>
-                Netto svalutato per inflazione 2%/anno
-              </p>
-            </div>
-
           </div>
 
           {/* CHART */}
-          <div className="card">
-            <h3 style={{ fontSize: '1rem', fontWeight: 800, marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <TrendingUp size={18} color="var(--chart-primary)" />
-              Proiezione a Lungo Termine — Nominale vs Potere d'Acquisto Reale
+          <div className="card" style={{ marginTop: '0.5rem' }}>
+            <h3 style={{ fontSize: '0.85rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <TrendingUp size={16} />
+              📈 Proiezione a Lungo Termine
             </h3>
 
-            <ResponsiveContainer width="100%" height={380}>
-              <AreaChart data={proj.projectionChartData} margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="gNominal" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="var(--chart-tertiary)" stopOpacity={0.6} />
-                    <stop offset="95%" stopColor="var(--chart-tertiary)" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="gReal" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="var(--chart-primary)" stopOpacity={0.6} />
-                    <stop offset="95%" stopColor="var(--chart-primary)" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="gInvested" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="var(--text-muted)" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="var(--text-muted)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" vertical={false} />
-                <XAxis
-                  dataKey="age"
-                  tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={v => `${v} anni`}
-                />
-                <YAxis
-                  tickFormatter={v => `€${(v / 1000).toFixed(0)}k`}
-                  tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={false}
-                  width={72}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'var(--bg-secondary)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: 'var(--radius-md)',
-                    color: 'var(--text-primary)',
-                    fontSize: '0.8rem',
-                  }}
-                  formatter={(value, name) => [formatEuro(value), name]}
-                  labelFormatter={label => `Età: ${label} anni`}
-                />
-                <Legend wrapperStyle={{ fontSize: '0.78rem', paddingTop: '16px' }} iconType="circle" />
-                <Area
-                  type="monotone"
-                  dataKey="nominalBalance"
-                  name="Capitale Nominale"
-                  stroke="var(--chart-tertiary)"
-                  strokeWidth={2}
-                  fillOpacity={1}
-                  fill="url(#gNominal)"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="realBalance"
-                  name="Potere d'Acquisto Reale"
-                  stroke="var(--chart-primary)"
-                  strokeWidth={2}
-                  fillOpacity={1}
-                  fill="url(#gReal)"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="invested"
-                  name="Capitale Versato"
-                  stroke="var(--text-muted)"
-                  strokeWidth={1.5}
-                  strokeDasharray="4 3"
-                  fillOpacity={1}
-                  fill="url(#gInvested)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            <div style={{ width: '100%' }}>
+              <ResponsiveContainer width="100%" height={400}>
+                <AreaChart data={proj.projectionChartData} margin={{ top: 20, right: 20, left: 10, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="gNominal" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor="var(--chart-tertiary)" stopOpacity={0.6} />
+                      <stop offset="95%" stopColor="var(--chart-tertiary)" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="gReal" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor="var(--chart-primary)" stopOpacity={0.6} />
+                      <stop offset="95%" stopColor="var(--chart-primary)" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="gInvested" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor="var(--text-muted)" stopOpacity={0.35} />
+                      <stop offset="95%" stopColor="var(--text-muted)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" vertical={false} />
+                  
+                  <XAxis
+                    dataKey="age"
+                    tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={v => `${v} anni`}
+                  />
+                  
+                  {/* Dominio Y dinamico per ridurre lo spazio bianco in alto */}
+                  <YAxis
+                    domain={[0, dataMax => Math.ceil(dataMax * 1.1)]}
+                    tickFormatter={v => `€${(v / 1000).toFixed(0)}k`}
+                    tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
+                    tickLine={false}
+                    axisLine={false}
+                    width={72}
+                  />
+
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'var(--bg-secondary)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-md)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.8rem',
+                    }}
+                    formatter={(value, name) => [formatEuro(value), name]}
+                    labelFormatter={(label, payload) => {
+                      const yearOffset = payload?.[0]?.payload?.yearOffset || 0;
+                      const currentYear = new Date().getFullYear();
+                      return `Anno: ${currentYear + yearOffset} (Età: ${label} anni)`;
+                    }}
+                  />
+                  
+                  <Legend wrapperStyle={{ fontSize: '0.78rem', paddingTop: '16px' }} iconType="circle" />
+
+                  {/* Linee di riferimento */}
+                  {fireNumber > 0 && (
+                    <ReferenceLine 
+                      y={fireNumber} 
+                      stroke="var(--status-yellow)" 
+                      strokeDasharray="4 4" 
+                      label={{ position: 'insideTopLeft', value: 'Obiettivo FIRE', fill: 'var(--text-muted)', fontSize: 10, offset: 10 }} 
+                    />
+                  )}
+                  <ReferenceLine 
+                    x={retirementAge} 
+                    stroke="var(--text-muted)" 
+                    strokeDasharray="4 4" 
+                    label={{ position: 'insideBottomRight', value: `Pensione`, fill: 'var(--text-muted)', fontSize: 10, offset: 10 }} 
+                  />
+
+                  <Area
+                    type="monotone"
+                    dataKey="nominalBalance"
+                    name="Capitale Nominale"
+                    stroke="var(--chart-tertiary)"
+                    strokeWidth={2}
+                    fillOpacity={1}
+                    fill="url(#gNominal)"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="realBalance"
+                    name="Potere d'Acquisto Reale"
+                    stroke="var(--chart-primary)"
+                    strokeWidth={2}
+                    fillOpacity={1}
+                    fill="url(#gReal)"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="invested"
+                    name="Capitale Versato"
+                    stroke="var(--text-muted)"
+                    strokeWidth={1.5}
+                    strokeDasharray="4 3"
+                    fillOpacity={1}
+                    fill="url(#gInvested)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
           </div>
 
         </div>
