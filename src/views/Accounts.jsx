@@ -465,7 +465,7 @@ export default function Accounts({ onNavigate }) {
                             {formatEuro(acc.currentBalance ?? acc.balance ?? 0)}
                           </span>
                           <div className="flex gap-2">
-                            <button onClick={() => handleEdit(acc)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><Edit3 size={14} /></button>
+                            <button onClick={() => handleEdit(acc)} style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '0.25rem 0.5rem', cursor: 'pointer', color: 'var(--text-primary)', fontSize: '0.75rem', fontWeight: 'bold' }}>Modifica</button>
                             <button onClick={() => handleDelete(acc.id)} disabled={isLinked} style={{ background: 'none', border: 'none', cursor: isLinked ? 'not-allowed' : 'pointer', color: isLinked ? 'var(--text-muted)' : 'var(--status-red)', opacity: isLinked ? 0.3 : 1 }}><Trash2 size={14} /></button>
                           </div>
                         </div>
