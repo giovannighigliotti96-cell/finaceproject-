@@ -173,19 +173,23 @@ export function useOverviewMetrics() {
     const isOffTrack = gapTarget !== null && gapTarget < 0;
 
     // --- SAVINGS HEALTH MONITOR ---
-    // Obiettivo: chiudere con almeno safetyBuffer in più rispetto al carry-over pre-stipendio.
-    // Non dipende da proiezioneAffidabile: usa saldoBaseChiusura se disponibile,
-    // altrimenti stima conservativa (opening - fissi - variabili già pagate = scenario migliore).
+    // NUOVA LOGICA ROBUSTA BASATA SULLA LIQUIDITA' OPERATIVA REALE
+    // Invariante rispetto agli addebiti e immune a disallineamenti di openingBalance.
     const savingsTargetBuffer = settings.safetyBuffer ?? 0;
-    const carryOver = Math.max(0, opening - incomeActual);
-    const targetClosingMin = opening - Math.min(incomeActual, opening) + savingsTargetBuffer;
-    // Stima diretta (non richiede forecast affidabile): "se non spendo altro, arrivo a X"
-    const projectedClosingConservative = opening - costiFissiTotaliCiclo - investimentiTotaliCiclo - variableExpensesActual;
-    // Usa sempre la stima conservativa (stato attuale) per il monitor di salute,
-    // in modo che rifletta esattamente le uscite correnti senza proiettare
-    // linearmente eventuali picchi di spesa variabile (che sballerebbero il KPI).
-    const projectedClosingForHealth = projectedClosingConservative;
-    const erosionMargin = projectedClosingForHealth - targetClosingMin;
+    
+    // Proiezione conservativa: liquidità attuale meno i costi fissi e investimenti che DEVO ancora pagare.
+    // (Le variabili già pagate hanno già ridotto la operatingLiquidity)
+    const projectedClosingForHealth = operatingLiquidity - usciteFissePianificateResidue - investimentiPianificatiResidui;
+    
+    // Il margine di spesa variabile "reale" senza toccare il buffer
+    const unboundedLiquidity = redditoNettoCiclo - savingsTargetBuffer - variableExpensesActual;
+    
+    // Il target minimo di chiusura è la proiezione meno tutto il margine variabile.
+    // In questo modo, se spendo tutto il margine variabile, chiudo esattamente al target.
+    const targetClosingMin = projectedClosingForHealth - unboundedLiquidity;
+    
+    const carryOver = targetClosingMin - savingsTargetBuffer;
+    const erosionMargin = unboundedLiquidity;
     const isSavingsEroding = erosionMargin < 0;
     const savingsHealthStatus =
       erosionMargin >= savingsTargetBuffer * 0.5 ? 'safe' :   // margine > 50% del buffer
