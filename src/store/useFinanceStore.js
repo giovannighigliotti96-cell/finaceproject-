@@ -141,6 +141,9 @@ export function generatePlannedFixedCosts(periodId, startDateObj, recurringRules
       txDateObj = new Date(nextMonth.getFullYear(), nextMonth.getMonth(), safeDayNext);
     }
 
+    // Leggi eventuale override di importo per questo specifico periodo
+    const effectiveAmount = rule.periodOverrides?.[periodId]?.amount ?? rule.amount;
+
     planned.push({
       id: `tx_${ts}_${Math.random().toString(36).slice(2)}_${rule.id}`,
       date: format(txDateObj, 'yyyy-MM-dd'),
@@ -149,9 +152,10 @@ export function generatePlannedFixedCosts(periodId, startDateObj, recurringRules
       type: rule.type,
       nature: 'fixed',
       status: 'planned',
-      amount: rule.amount,
+      amount: effectiveAmount,
       description: rule.name,
       categoryId: rule.id.replace('rule_', ''),
+      ruleId: rule.id,
       createdAt: ts,
     });
   });
@@ -455,7 +459,7 @@ export const useFinanceStore = create(
       // FIX 1.3: NON cancelliamo più la storia. Le tx dei cicli chiusi restano.
       // FIX 2.7: usa generatePlannedFixedCosts con fix dayOfMonth
       // FIX 3.8: guard su periodId duplicato
-      registerSalaryAndStartCycle: ({ amount, dateStr, bankBalance, isExtraordinaryIncome, openingInvestments }) =>
+      registerSalaryAndStartCycle: ({ amount, dateStr, bankBalance, isExtraordinaryIncome, openingInvestments, salaryAlreadyIncluded = true }) =>
         set(state => {
           const { periods, recurringRules, transactions, settings } = state.data;
 
@@ -481,23 +485,25 @@ export const useFinanceStore = create(
           const updatedPeriods = filteredPeriods.map(p => ({ ...p, status: 'closed' }));
 
           const minSavings = calcMinSavingsTarget(settings, state.data.goals); // [GAP-C03]
+          const finalOpeningBalance = salaryAlreadyIncluded ? Number(bankBalance) : Number(bankBalance) + Number(amount);
+
           updatedPeriods.push({
             id: periodId,
             type: 'fiscal',
             startDate,
             endDate,
             status: 'open',
-            openingBalance: Number(bankBalance),
-            targetClosingBalance: Number(bankBalance) + Number(minSavings),
+            openingBalance: finalOpeningBalance,
+            targetClosingBalance: finalOpeningBalance + Number(minSavings),
             openingInvestments: parseFloat(openingInvestments) || 0,  // ← aggiunta
           });
           // Crea/aggiorna conto principale
           const existingMain = state.data.accounts.find(a => a.id === 'acc_main');
           const updatedAccounts = existingMain
             ? state.data.accounts.map(a =>
-              a.id === 'acc_main' ? { ...a, currentBalance: Number(bankBalance) } : a
+              a.id === 'acc_main' ? { ...a, currentBalance: finalOpeningBalance } : a
             )
-            : [{ id: 'acc_main', name: 'Conto Corrente', type: 'operating_liquidity', currentBalance: Number(bankBalance) }];
+            : [{ id: 'acc_main', name: 'Conto Corrente', type: 'operating_liquidity', currentBalance: finalOpeningBalance }];
 
           // Transazione stipendio
           const ts = Date.now();
@@ -535,7 +541,7 @@ export const useFinanceStore = create(
               accounts: updatedAccounts,
               transactions: salaryExists ? [...keptTransactions, ...plannedTxs] : [...keptTransactions, salaryTx, ...plannedTxs],
               auditLog: appendAudit(state.data.auditLog, 'REGISTER_SALARY', {
-                periodId, amount: Number(amount), bankBalance: Number(bankBalance), startDate,
+                periodId, amount: Number(amount), bankBalance: finalOpeningBalance, startDate,
               }),
             },
           };
@@ -543,7 +549,7 @@ export const useFinanceStore = create(
 
       // ── CHIUDI CICLO CON GENERAZIONE FISSI (FIX 1.1) ───────────────────
       // Versione sicura di PeriodClose: genera i planned del nuovo ciclo.
-      closePeriodAndOpenNext: ({ realBankBalance, salaryAmount, discrepancy, isExtraordinaryIncome, accountUpdates = {}, realInvestmentsBalance = 0 }) =>
+      closePeriodAndOpenNext: ({ realBankBalance, salaryAmount, discrepancy, isExtraordinaryIncome, accountUpdates = {}, realInvestmentsBalance = 0, salaryAlreadyIncluded = true }) =>
         set(state => {
           const { data } = state;
           const activePeriod = data.periods.find(p => p.id === data.settings.activePeriodId);
@@ -561,14 +567,16 @@ export const useFinanceStore = create(
             p.id === activePeriod.id ? { ...p, status: 'closed' } : p
           );
           const minSavingsNext = calcMinSavingsTarget(data.settings, data.goals); // [GAP-C03]
+          const finalOpeningBalance = salaryAlreadyIncluded ? Number(realBankBalance) : Number(realBankBalance) + (Number(salaryAmount) || 0);
+
           updatedPeriods.push({
             id: nextPeriodId,
             type: 'fiscal',
             startDate: nextStart,
             endDate: nextEnd,
             status: 'open',
-            openingBalance: Number(realBankBalance),
-            targetClosingBalance: Number(realBankBalance) + Number(minSavingsNext), openingInvestments: parseFloat(realInvestmentsBalance) || 0,
+            openingBalance: finalOpeningBalance,
+            targetClosingBalance: finalOpeningBalance + Number(minSavingsNext), openingInvestments: parseFloat(realInvestmentsBalance) || 0,
           });
 
           // Aggiorna saldo conto con valore reale (realBankBalance è fonte di verità)
@@ -576,21 +584,21 @@ export const useFinanceStore = create(
           const tolerance = data.settings?.reconciliationTolerance ?? 10;
           if (accountUpdates && accountUpdates['acc_main'] !== undefined) {
             const provided = Number(accountUpdates['acc_main']);
-            if (Math.abs(provided - Number(realBankBalance)) > tolerance) {
-              console.warn('[closePeriodAndOpenNext] incoerenza saldo acc_main rispetto a realBankBalance:', provided, realBankBalance);
+            if (Math.abs(provided - finalOpeningBalance) > tolerance) {
+              console.warn('[closePeriodAndOpenNext] incoerenza saldo acc_main rispetto a realBankBalance:', provided, finalOpeningBalance);
               return state; // block closure due to incoherent account updates
             }
           }
 
           let updatedAccounts = data.accounts.map(a =>
-            a.id === 'acc_main' ? { ...a, currentBalance: Number(realBankBalance) } : a
+            a.id === 'acc_main' ? { ...a, currentBalance: finalOpeningBalance } : a
           );
 
           // If accountUpdates passed in args, apply them (GAP-S03 support) but do not overwrite acc_main with incoherent value
           if (accountUpdates && Object.keys(accountUpdates).length > 0) {
             updatedAccounts = updatedAccounts.map(a =>
               a.id === 'acc_main'
-                ? { ...a, currentBalance: Number(realBankBalance) }
+                ? { ...a, currentBalance: finalOpeningBalance }
                 : (accountUpdates[a.id] !== undefined
                   ? { ...a, currentBalance: Number(accountUpdates[a.id]) }
                   : a)
@@ -646,7 +654,7 @@ export const useFinanceStore = create(
               accounts: updatedAccounts,
               transactions: [...data.transactions, ...newTxs, ...plannedTxs],
               auditLog: appendAudit(data.auditLog, 'CLOSE_PERIOD', {
-                closedPeriodId: activePeriod.id, nextPeriodId, realBankBalance,
+                closedPeriodId: activePeriod.id, nextPeriodId, realBankBalance: finalOpeningBalance,
               }),
             },
           };
@@ -760,6 +768,83 @@ export const useFinanceStore = create(
               recurringRules: updatedRules,
               transactions: [...data.transactions, ...newTransactions],
               auditLog: appendAudit(data.auditLog, 'ADD_RECURRING_RULE', { ruleName: rule.name }),
+            },
+          };
+        }),
+
+      // ── OVERRIDE IMPORTO PER CICLO SPECIFICO ──────────────────────────────
+      // Salva un override di importo (o altri campi) valido solo per un periodId.
+      // Aggiorna anche la tx planned già generata per quel ciclo (se non pagata).
+      setRuleOverride: (ruleId, periodId, overrides) =>
+        set(state => {
+          const { data } = state;
+          const updatedRules = (data.recurringRules || []).map(r => {
+            if (r.id !== ruleId) return r;
+            return {
+              ...r,
+              periodOverrides: {
+                ...(r.periodOverrides || {}),
+                [periodId]: { ...(r.periodOverrides?.[periodId] || {}), ...overrides },
+              },
+            };
+          });
+
+          // Aggiorna anche la tx planned del ciclo target (se non pagata)
+          const updatedTransactions = data.transactions.map(t => {
+            if (
+              t.status === 'planned' &&
+              t.periodId === periodId &&
+              (t.ruleId === ruleId || t.categoryId === ruleId.replace('rule_', ''))
+            ) {
+              return {
+                ...t,
+                amount: overrides.amount !== undefined ? Number(overrides.amount) : t.amount,
+              };
+            }
+            return t;
+          });
+
+          return {
+            data: {
+              ...data,
+              recurringRules: updatedRules,
+              transactions: updatedTransactions,
+              auditLog: appendAudit(data.auditLog, 'SET_RULE_OVERRIDE', { ruleId, periodId, overrides }),
+            },
+          };
+        }),
+
+      // Rimuove un override per un ciclo specifico, ripristinando l'importo base sulla tx planned.
+      clearRuleOverride: (ruleId, periodId) =>
+        set(state => {
+          const { data } = state;
+          const baseRule = (data.recurringRules || []).find(r => r.id === ruleId);
+          if (!baseRule) return state;
+
+          const updatedRules = (data.recurringRules || []).map(r => {
+            if (r.id !== ruleId) return r;
+            const { [periodId]: _removed, ...rest } = r.periodOverrides || {};
+            return { ...r, periodOverrides: rest };
+          });
+
+          // Ripristina importo base sulla tx planned del ciclo target
+          const updatedTransactions = data.transactions.map(t => {
+            if (
+              t.status === 'planned' &&
+              t.periodId === periodId &&
+              (t.ruleId === ruleId || t.categoryId === ruleId.replace('rule_', ''))
+            ) {
+              return { ...t, amount: baseRule.amount };
+            }
+            return t;
+          });
+
+          return {
+            data: {
+              ...data,
+              recurringRules: updatedRules,
+              transactions: updatedTransactions,
+              auditLog: appendAudit(data.auditLog, 'CLEAR_RULE_OVERRIDE', { ruleId, periodId }),
             },
           };
         }),

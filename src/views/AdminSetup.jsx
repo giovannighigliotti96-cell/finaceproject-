@@ -17,6 +17,7 @@ export default function AdminSetup() {
     dateStr: '',
     bankBalance: '',
     isExtraordinaryIncome: false,
+    salaryAlreadyIncluded: false,
   });
   const [saved, setSaved] = useState(false);
 
@@ -178,12 +179,12 @@ export default function AdminSetup() {
                 />
               </div>
               <div>
-                <label style={labelStyle}><Landmark size={11} /> Saldo Reale Banca (€)</label>
+                <label style={labelStyle}><Landmark size={11} /> Saldo Reale Banca (Prima dello stipendio)</label>
                 <input
                   type="number"
                   value={form.bankBalance}
                   onChange={e => setForm({ ...form, bankBalance: e.target.value })}
-                  placeholder="Saldo effettivo post-accredito"
+                  placeholder="Saldo effettivo pre-accredito"
                   style={inputStyle}
                 />
               </div>
@@ -211,6 +212,26 @@ export default function AdminSetup() {
                 Tredicesima / Entrata Straordinaria
               </label>
             </div>
+
+            {Number(form.amount) > 0 && (
+              <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'var(--bg-secondary)', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                <input
+                  type="checkbox"
+                  id="salary_included_admin"
+                  checked={form.salaryAlreadyIncluded}
+                  onChange={e => setForm({ ...form, salaryAlreadyIncluded: e.target.checked })}
+                  style={{ width: '1.2rem', height: '1.2rem', cursor: 'pointer' }}
+                />
+                <label htmlFor="salary_included_admin" style={{ fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600, flex: 1 }}>
+                  Il Saldo Reale indicato sopra <strong>include già</strong> questo stipendio?
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 400, marginTop: '0.2rem' }}>
+                    {form.salaryAlreadyIncluded 
+                      ? `Il saldo iniziale del nuovo ciclo sarà ${formatEuro(Number(form.bankBalance) || 0)}.` 
+                      : `Il saldo iniziale sarà ricalcolato come ${formatEuro(Number(form.bankBalance) || 0)} + ${formatEuro(Number(form.amount))} = ${formatEuro((Number(form.bankBalance) || 0) + Number(form.amount))}.`}
+                  </div>
+                </label>
+              </div>
+            )}
 
             <div style={{ display: 'flex', gap: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
               <button

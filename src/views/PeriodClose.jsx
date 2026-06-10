@@ -17,6 +17,7 @@ export default function PeriodClose({ onNavigate }) {
   // FIX 1.1: wizard richiede inserimento stipendio
   const [salaryAmount, setSalaryAmount] = useState(data.settings?.defaultIncome || 1900);
   const [isExtraordinaryIncome, setIsExtraordinaryIncome] = useState(false);
+  const [salaryAlreadyIncluded, setSalaryAlreadyIncluded] = useState(false);
     const [accountUpdates, setAccountUpdates] = useState({});
 
   const formatEuro = (val) => new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(val);
@@ -45,6 +46,7 @@ const realInvestmentsBalance = investmentAccount
       isExtraordinaryIncome,
       accountUpdates, // [GAP-S03]
       realInvestmentsBalance,
+      salaryAlreadyIncluded,
     });
 
     const nextStart = format(
@@ -85,7 +87,7 @@ const realInvestmentsBalance = investmentAccount
             </div>
 
             <div>
-              <label className="kpi-label mb-1">Saldo Reale (Estratto Conto Oggi)</label>
+              <label className="kpi-label mb-1">Saldo Reale (Prima dello stipendio)</label>
               <input
                 type="number"
                 value={realBankBalance}
@@ -142,6 +144,26 @@ const realInvestmentsBalance = investmentAccount
               placeholder="Importo stipendio (opzionale)"
               style={{ width: '100%', padding: '0.625rem 0.75rem', fontSize: '1rem', fontWeight: 700, background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', color: 'var(--status-green)', boxSizing: 'border-box' }}
             />
+            
+            {Number(salaryAmount) > 0 && (
+              <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'var(--bg-secondary)', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                <input
+                  type="checkbox"
+                  id="salary_included"
+                  checked={salaryAlreadyIncluded}
+                  onChange={e => setSalaryAlreadyIncluded(e.target.checked)}
+                  style={{ width: '1.2rem', height: '1.2rem', cursor: 'pointer' }}
+                />
+                <label htmlFor="salary_included" style={{ fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600, flex: 1 }}>
+                  Il Saldo Reale indicato sopra <strong>include già</strong> questo stipendio?
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 400, marginTop: '0.2rem' }}>
+                    {salaryAlreadyIncluded 
+                      ? `Il saldo iniziale del nuovo ciclo sarà ${formatEuro(Number(realBankBalance))}.` 
+                      : `Il saldo iniziale sarà ricalcolato come ${formatEuro(Number(realBankBalance))} + ${formatEuro(Number(salaryAmount))} = ${formatEuro(Number(realBankBalance) + Number(salaryAmount))}.`}
+                  </div>
+                </label>
+              </div>
+            )}
             
             <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
               <input
