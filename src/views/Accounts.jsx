@@ -48,12 +48,12 @@ export default function Accounts({ onNavigate }) {
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [form, setForm] = useState({ name: '', type: 'operating_liquidity', currentBalance: '' });
+  const [form, setForm] = useState({ name: '', type: 'operating_liquidity', currentBalance: '', updatePeriodOpening: false });
 
   const formatEuro = (val) => new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(val);
 
   const resetForm = () => {
-    setForm({ name: '', type: 'operating_liquidity', currentBalance: '' });
+    setForm({ name: '', type: 'operating_liquidity', currentBalance: '', updatePeriodOpening: false });
     setShowForm(false);
     setEditingId(null);
   };
@@ -63,7 +63,7 @@ export default function Accounts({ onNavigate }) {
     const balance = parseFloat(form.currentBalance);
     if (isNaN(balance)) { showToast('Saldo non valido', 'error'); return; }
     if (editingId) {
-      updateAccount(editingId, { name: form.name, type: form.type, currentBalance: balance });
+      updateAccount(editingId, { name: form.name, type: form.type, currentBalance: balance }, form.updatePeriodOpening);
       showToast('Conto aggiornato', 'success');
     } else {
       addAccount({ name: form.name, type: form.type, currentBalance: balance });
@@ -73,7 +73,7 @@ export default function Accounts({ onNavigate }) {
   };
 
   const handleEdit = (acc) => {
-    setForm({ name: acc.name, type: acc.type, currentBalance: acc.currentBalance ?? acc.balance ?? 0 });
+    setForm({ name: acc.name, type: acc.type, currentBalance: acc.currentBalance ?? acc.balance ?? 0, updatePeriodOpening: false });
     setEditingId(acc.id);
     setShowForm(true);
   };
@@ -425,6 +425,19 @@ export default function Accounts({ onNavigate }) {
               <input type="number" step="0.01" value={form.currentBalance} onChange={e => setForm(p => ({ ...p, currentBalance: e.target.value }))} style={inputStyle} />
             </div>
           </div>
+          {editingId && (
+            <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <input 
+                type="checkbox" 
+                id="update_period" 
+                checked={form.updatePeriodOpening} 
+                onChange={e => setForm(p => ({ ...p, updatePeriodOpening: e.target.checked }))} 
+              />
+              <label htmlFor="update_period" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                Applica questo saldo anche come Saldo Iniziale del ciclo corrente (usa se stai correggendo un errore di chiusura mese)
+              </label>
+            </div>
+          )}
           <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
             <button className="btn btn-ghost flex items-center gap-2" onClick={resetForm}><X size={15} /> Annulla</button>
             <button className="btn btn-primary flex items-center gap-2" onClick={handleSave}><Check size={15} /> Salva</button>

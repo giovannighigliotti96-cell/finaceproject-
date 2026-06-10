@@ -312,15 +312,28 @@ export const useFinanceStore = create(
         }
       })),
 
-      updateAccount: (accountId, updates) => set(state => ({
-        data: {
-          ...state.data,
-          accounts: state.data.accounts.map(a =>
-            a.id === accountId ? { ...a, ...updates } : a
-          ),
-          auditLog: appendAudit(state.data.auditLog, 'UPD_ACCOUNT', { accountId })
+      updateAccount: (accountId, updates, updatePeriodOpening = false) => set(state => {
+        let newPeriods = state.data.periods;
+        
+        // Se richiesto e se si sta aggiornando il conto principale, aggiorna anche il saldo iniziale del ciclo attivo
+        if (updatePeriodOpening && accountId === 'acc_main' && updates.currentBalance !== undefined) {
+          const activePeriodId = state.data.settings?.activePeriodId;
+          if (activePeriodId) {
+            newPeriods = state.data.periods.map(p => 
+              p.id === activePeriodId ? { ...p, openingBalance: Number(updates.currentBalance) } : p
+            );
+          }
         }
-      })),
+
+        return {
+          data: {
+            ...state.data,
+            periods: newPeriods,
+            accounts: state.data.accounts.map(acc => acc.id === accountId ? { ...acc, ...updates } : acc),
+            auditLog: appendAudit(state.data.auditLog, 'UPDATE_ACCOUNT', { accountId, updates }),
+          },
+        };
+      }),
 
       // ── AGGIUNGI TRANSAZIONE ─────────────────────────────────────────────
       // FIX 2.2: validazione NaN + supporto virgola europea
