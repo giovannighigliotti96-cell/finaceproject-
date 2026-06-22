@@ -154,40 +154,27 @@ export function useOverviewMetrics() {
     const proiezioneStress = burnNecessario + (burnDiscrezionale * 1.3);
     const proiezionePrudente = burnNecessario + (burnDiscrezionale * 0.8);
 
-    // FIX FORECAST: opening = saldo post-stipendio (già include il salary registrato).
-    // targetChiusura = carry-over (opening - salary) + safetyBuffer (400€).
-    // Allineato al Savings Health Monitor: entrambi usano il buffer come target.
-    // targetSavingsAmount (190€) è un campo separato solo per la pianificazione mensile Goals.
-    const targetChiusura = (opening - incomeActual) + (settings.safetyBuffer || 0);
+    // --- SAVINGS HEALTH MONITOR (Moved up for Forecast) ---
+    const savingsTargetBuffer = settings.safetyBuffer ?? 0;
+    const projectedClosingForHealth = operatingLiquidity - usciteFissePianificateResidue - investimentiPianificatiResidui;
+    const unboundedLiquidity = redditoNettoCiclo - savingsTargetBuffer - variableExpensesActual;
+    const targetClosingMin = projectedClosingForHealth - unboundedLiquidity;
+
+    // FIX FORECAST: Usa la logica basata sulla liquidità operativa reale (come Savings Health Monitor)
+    const targetChiusura = targetClosingMin;
     const saldoBaseChiusura = proiezioneAffidabile
-      ? opening - costiFissiTotaliCiclo - investimentiTotaliCiclo - proiezioneVariabileBase
+      ? projectedClosingForHealth - (proiezioneVariabileBase - variableExpensesActual)
       : null;
 
     const scenariForecast = proiezioneAffidabile ? [
-      { name: 'Prudente (-20% discrezionali)', saldo: opening - costiFissiTotaliCiclo - investimentiTotaliCiclo - proiezionePrudente, color: 'var(--status-green)' },
+      { name: 'Prudente (-20% discrezionali)', saldo: projectedClosingForHealth - (proiezionePrudente - variableExpensesActual), color: 'var(--status-green)' },
       { name: 'Base (Attuale)', saldo: saldoBaseChiusura, color: 'var(--chart-primary)' },
-      { name: 'Stress (+30% discrezionali)', saldo: opening - costiFissiTotaliCiclo - investimentiTotaliCiclo - proiezioneStress, color: 'var(--status-red)' },
+      { name: 'Stress (+30% discrezionali)', saldo: projectedClosingForHealth - (proiezioneStress - variableExpensesActual), color: 'var(--status-red)' },
     ] : [];
 
     const gapTarget = saldoBaseChiusura !== null ? saldoBaseChiusura - targetChiusura : null;
     const isOffTrack = gapTarget !== null && gapTarget < 0;
 
-    // --- SAVINGS HEALTH MONITOR ---
-    // NUOVA LOGICA ROBUSTA BASATA SULLA LIQUIDITA' OPERATIVA REALE
-    // Invariante rispetto agli addebiti e immune a disallineamenti di openingBalance.
-    const savingsTargetBuffer = settings.safetyBuffer ?? 0;
-    
-    // Proiezione conservativa: liquidità attuale meno i costi fissi e investimenti che DEVO ancora pagare.
-    // (Le variabili già pagate hanno già ridotto la operatingLiquidity)
-    const projectedClosingForHealth = operatingLiquidity - usciteFissePianificateResidue - investimentiPianificatiResidui;
-    
-    // Il margine di spesa variabile "reale" senza toccare il buffer
-    const unboundedLiquidity = redditoNettoCiclo - savingsTargetBuffer - variableExpensesActual;
-    
-    // Il target minimo di chiusura è la proiezione meno tutto il margine variabile.
-    // In questo modo, se spendo tutto il margine variabile, chiudo esattamente al target.
-    const targetClosingMin = projectedClosingForHealth - unboundedLiquidity;
-    
     const carryOver = targetClosingMin - savingsTargetBuffer;
     const erosionMargin = unboundedLiquidity;
     const isSavingsEroding = erosionMargin < 0;
@@ -304,7 +291,10 @@ export function useOverviewMetrics() {
     const safetyBufferAdeguato = (settings.safetyBuffer ?? 0) >= safetyBufferConsigliato * 0.8;
 
     // --- PHASE 5: Proiezione Annuale (Round-2 GAP-C02) ---
-    const risparmioStimaCicloCorrente = Math.max(0, (saldoBaseChiusura ?? opening) - (opening - incomeActual));
+    // La stima del risparmio del ciclo corrente basata sul Base scenario (che usa operatingLiquidity).
+    // Usiamo targetClosingMin - savingsTargetBuffer come baseline del risparmio target, 
+    // e vi aggiungiamo l'eventuale extra buffer.
+    const risparmioStimaCicloCorrente = Math.max(0, (saldoBaseChiusura ?? targetClosingMin) - targetClosingMin + carryOver);
 
     // Weighted historic average over up to 6 closed periods (more weight to recent)
     const recentClosed = periods.filter(p => p.id !== activePeriod.id && p.status === 'closed').slice(-6);
@@ -336,7 +326,7 @@ export function useOverviewMetrics() {
     const proiezioneVsObiettiviGap = proiezioneAnnualeRisparmio / 12 - goalsMonthlyTarget;
     const inLineaConObiettivi = proiezioneVsObiettiviGap >= 0;
 
-    const risparmioNettoMensile = Math.max(0, (saldoBaseChiusura || 0) - (opening - incomeActual)) / totalDaysInPeriod * 30;
+    const risparmioNettoMensile = Math.max(0, risparmioStimaCicloCorrente) / totalDaysInPeriod * 30;
     const goalFundingRate = goalsMonthlyTarget > 0
       ? Math.min(100, (risparmioNettoMensile / goalsMonthlyTarget) * 100)
       : 100;
