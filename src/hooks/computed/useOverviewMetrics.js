@@ -160,7 +160,7 @@ export function useOverviewMetrics() {
     // targetSavingsAmount (190€) è un campo separato solo per la pianificazione mensile Goals.
     const targetChiusura = (opening - incomeActual) + (settings.safetyBuffer || 0);
     const saldoBaseChiusura = proiezioneAffidabile
-      ? operatingLiquidity - usciteFissePianificateResidue - investimentiPianificatiResidui - (proiezioneVariabileBase - variableExpensesActual)
+      ? opening - costiFissiTotaliCiclo - investimentiTotaliCiclo - proiezioneVariabileBase
       : null;
 
     const scenariForecast = proiezioneAffidabile ? [
@@ -304,7 +304,7 @@ export function useOverviewMetrics() {
     const safetyBufferAdeguato = (settings.safetyBuffer ?? 0) >= safetyBufferConsigliato * 0.8;
 
     // --- PHASE 5: Proiezione Annuale (Round-2 GAP-C02) ---
-    const risparmioStimaCicloCorrente = Math.max(0, (saldoBaseChiusura ?? opening) - opening);
+    const risparmioStimaCicloCorrente = Math.max(0, (saldoBaseChiusura ?? opening) - (opening - incomeActual));
 
     // Weighted historic average over up to 6 closed periods (more weight to recent)
     const recentClosed = periods.filter(p => p.id !== activePeriod.id && p.status === 'closed').slice(-6);
@@ -336,7 +336,7 @@ export function useOverviewMetrics() {
     const proiezioneVsObiettiviGap = proiezioneAnnualeRisparmio / 12 - goalsMonthlyTarget;
     const inLineaConObiettivi = proiezioneVsObiettiviGap >= 0;
 
-    const risparmioNettoMensile = Math.max(0, (saldoBaseChiusura || 0) - opening) / totalDaysInPeriod * 30;
+    const risparmioNettoMensile = Math.max(0, (saldoBaseChiusura || 0) - (opening - incomeActual)) / totalDaysInPeriod * 30;
     const goalFundingRate = goalsMonthlyTarget > 0
       ? Math.min(100, (risparmioNettoMensile / goalsMonthlyTarget) * 100)
       : 100;
